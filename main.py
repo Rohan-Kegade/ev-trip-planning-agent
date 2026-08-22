@@ -6,10 +6,12 @@ from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import HumanMessage, AIMessage
 import os
 import requests
+import polyline
 
 load_dotenv()
 
 ORS_API_KEY = os.getenv("OPENROUTESERVICE_KEY")
+OCM_API_KEY = os.getenv("OPENCHARGEMAP_KEY")
 
 llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash-lite")
 
@@ -163,13 +165,64 @@ def get_route(origin: str, destination: str):
 
     route = data["routes"][0]
 
-    route = {
+    return {
         "distance_km": round(route["summary"]["distance"] / 1000, 2),
         "duration_minutes": round(route["summary"]["duration"] / 60, 1),
         "geometry": route["geometry"],
     }
 
-    return route
+
+def get_charging_stations_along_route(
+    geometry: str, sample_interval: int = 30, search_radius_km: int = 10
+):
+    # polyline.decode returns tuples of (latitude, longitude)
+    coordinates = polyline.decode(geometry)
+
+    if not coordinates:
+        return []
+
+    sampled_coordinates = coordinates[::sample_interval]
+
+    if coordinates[-1] not in sampled_coordinates:
+        sampled_coordinates.append(coordinates[-1])
+
+    stations = {}
+    url = "https://api.openchargemap.io/v3/poi/"
+    headers = {"X-API-Key": OCM_API_KEY, "User-Agent": "EV-Trip_Planner"}
+
+    for lat, lon in sampled_coordinates:
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "distance": search_radius_km,
+            "distanceunit": "KM",
+            "maxresults": 20,
+            "compact": True,
+        }
+
+        response = requests.get(url, headers=headers, params=params, timeout=15)
+
+        if response.status_code != 200:
+            continue
+
+        for station in response.json():
+            station_id = station.get("ID")
+            if not station_id:
+                continue
+
+            address = station.get("AddressInfo", {})
+
+            stations[station_id] = {
+                "id": station_id,
+                "name": address.get("Title"),
+                "latitude": address.get("Latitude"),
+                "longitude": address.get("Longitude"),
+                "town": address.get("Town"),
+                "state": address.get("StateOrProvince"),
+                "address": address.get("AddressLine1"),
+            }
+
+    return list(stations.values())
 
 
 def find_route(state: TripState):
@@ -185,11 +238,16 @@ def find_route(state: TripState):
             ]
         }
 
+    stations = get_charging_stations_along_route(route["geometry"])
+
     message = (
         f"I found a route for your trip.\n\n"
         f"Distance: {route['distance_km']} km\n"
-        f"Estimated travel time: {route['duration_minutes']} minutes"
+        f"Estimated travel time: {route['duration_minutes']} minutes\n"
+        f"Charging stations found along the route: {len(stations)}"
     )
+    print(message)
+    print(stations)
 
     return {"messages": [AIMessage(content=message)]}
 
