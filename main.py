@@ -48,7 +48,7 @@ class TripState(TypedDict):
     trip_ready: bool
 
 
-def gather_trip_details(state: TripState):
+def extract_trip_details(state: TripState):
 
     prompt = f"""
         Extract the trip details from the conversation.
@@ -67,7 +67,7 @@ def gather_trip_details(state: TripState):
     return {"trip": trip_details}
 
 
-def conversation_agent(state: TripState):
+def gather_trip_details(state: TripState):
 
     prompt = f"""
         You are an intelligent EV trip-planning assistant.
@@ -97,7 +97,7 @@ def conversation_agent(state: TripState):
     return {"messages": [AIMessage(content=response.message)]}
 
 
-def validate_trip(state: TripState):
+def validate_trip_details(state: TripState):
 
     trip = state["trip"]
 
@@ -113,14 +113,15 @@ def validate_trip(state: TripState):
     return {"trip_ready": trip_ready}
 
 
-def route_after_validation(
+def router_trip_details(
     state: TripState,
-) -> Literal["conversation_agent", "find_route"]:
+) -> Literal["gather_trip_details", "find_route"]:
 
     if state["trip_ready"]:
+        print("Trip details gathered!")
         return "find_route"
 
-    return "conversation_agent"
+    return "gather_trip_details"
 
 
 def get_coordinates(place_name: str):
@@ -226,44 +227,43 @@ def get_charging_stations_along_route(
 
 
 def find_route(state: TripState):
+    pass
 
-    trip = state["trip"]
+    # trip = state["trip"]
 
-    route = get_route(trip.origin, trip.destination)
+    # route = get_route(trip.origin, trip.destination)
 
-    if route is None:
-        return {
-            "messages": [
-                AIMessage(content="I couldn't find a route between those locations.")
-            ]
-        }
+    # if route is None:
+    #     return {
+    #         "messages": [
+    #             AIMessage(content="I couldn't find a route between those locations.")
+    #         ]
+    #     }
 
-    stations = get_charging_stations_along_route(route["geometry"])
+    # stations = get_charging_stations_along_route(route["geometry"])
 
-    message = (
-        f"I found a route for your trip.\n\n"
-        f"Distance: {route['distance_km']} km\n"
-        f"Estimated travel time: {route['duration_minutes']} minutes\n"
-        f"Charging stations found along the route: {len(stations)}"
-    )
-    print(message)
-    print(stations)
+    # message = (
+    #     f"I found a route for your trip.\n\n"
+    #     f"Distance: {route['distance_km']} km\n"
+    #     f"Estimated travel time: {route['duration_minutes']} minutes\n"
+    #     f"Charging stations found along the route: {len(stations)}"
+    # )
+    # print(message)
+    # print(stations)
 
-    return {"messages": [AIMessage(content=message)]}
-
+    # return {"messages": [AIMessage(content=message)]}
 
 graph = StateGraph(TripState)
 
 graph.add_node("gather_trip_details", gather_trip_details)
-graph.add_node("conversation_agent", conversation_agent)
-graph.add_node("validate_trip", validate_trip)
+graph.add_node("extract_trip_details", extract_trip_details)
+graph.add_node("validate_trip_details", validate_trip_details)
 graph.add_node("find_route", find_route)
 
-graph.add_edge(START, "gather_trip_details")
-graph.add_edge("gather_trip_details", "validate_trip")
-graph.add_conditional_edges("validate_trip", route_after_validation)
-graph.add_edge("find_route", "conversation_agent")
-graph.add_edge("conversation_agent", END)
+graph.add_edge(START, "extract_trip_details")
+graph.add_edge("extract_trip_details", "validate_trip_details")
+graph.add_conditional_edges("validate_trip_details", router_trip_details)
+graph.add_edge("find_route", END)
 
 app = graph.compile()
 
