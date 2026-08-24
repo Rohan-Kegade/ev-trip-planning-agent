@@ -1,0 +1,10 @@
+langgraph
+langchain-google-genai
+python-dotenv
+pydantic
+polyline
+fastapi
+uvicorn
+
+
+langgraph langchain-google-genai python-dotenv pydantic polyline fastapi uvicorn
