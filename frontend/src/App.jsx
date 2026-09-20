@@ -4,9 +4,9 @@ import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug,
 const API_URL = 'http://localhost:8000/chat';
 
 const SUGGESTIONS = [
-  'Trip from Seattle to Portland',
-  'Plan a round trip to Los Angeles',
-  'Help me pick a weekend destination',
+  'Trip from Mumbai to Pune',
+  'Plan a round trip from Delhi to Jaipur',
+  'Help me pick a weekend destination near Bengaluru',
 ];
 
 const formatTime = (mins) => {
@@ -265,8 +265,12 @@ export default function App() {
           )}
         </div>
 
-        <div className="text-[11px] text-slate-500 dark:text-slate-400 text-center pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 tracking-wide">
-          AI EV Trip Planning Agent
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 tracking-wide flex items-center justify-center gap-2">
+          <span className="relative flex w-2 h-2" aria-hidden="true">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
+            <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
+          </span>
+          <span className="shimmer-text font-medium">AI EV Trip Planning Agent</span>
         </div>
       </aside>
 
