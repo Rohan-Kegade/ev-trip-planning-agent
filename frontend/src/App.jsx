@@ -77,11 +77,10 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [graphState.messages, isLoading]);
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!inputMessage.trim() || isLoading) return;
+  const sendMessage = async (text) => {
+    if (!text.trim() || isLoading) return;
 
-    const userText = inputMessage;
+    const userText = text;
     setInputMessage('');
     setIsLoading(true);
 
@@ -132,6 +131,11 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    sendMessage(inputMessage);
   };
 
   const resetSession = () => {
@@ -298,7 +302,7 @@ export default function App() {
                   {SUGGESTIONS.map((text) => (
                     <button
                       key={text}
-                      onClick={() => setInputMessage(text)}
+                      onClick={() => sendMessage(text)}
                       className="px-4 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:border-indigo-300 dark:hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:shadow-md transition flex items-center gap-1.5"
                     >
                       <Sparkles className="w-3.5 h-3.5" /> {text}
