@@ -54,6 +54,7 @@ export default function App() {
     trip_details_confirmed: false,
     route_details_found: false,
     route_approved: false,
+    charging_search_pending: false,
     charging_station: null,
     vehicle_state: { battery_soc: null, range_left: null },
   });
@@ -101,6 +102,7 @@ export default function App() {
         trip_details_confirmed: graphState.trip_details_confirmed,
         route_details_found: graphState.route_details_found,
         route_approved: graphState.route_approved,
+        charging_search_pending: graphState.charging_search_pending,
         charging_station: graphState.charging_station,
         vehicle_state: graphState.vehicle_state,
       };
@@ -147,6 +149,7 @@ export default function App() {
       trip_details_confirmed: false,
       route_details_found: false,
       route_approved: false,
+      charging_search_pending: false,
       charging_station: null,
       vehicle_state: { battery_soc: null, range_left: null },
     });

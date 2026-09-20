@@ -31,11 +31,11 @@ class TripDetails(BaseModel):
 
 
 class RouteDetails(BaseModel):
-    distance: int | None = Field(default=None, description="Total distance between origin and destination")
+    distance: float | None = Field(default=None, description="Total distance in kilometers")
 
-    time: int | None = Field(default=None, description="Total time required to travel the given distance")
+    time: float | None = Field(default=None, description="Total travel time in minutes")
 
-    route_geometry: int | None = Field(default=None, description="Encoded polyline string representing the spatial route geometry")
+    route_geometry: str | None = Field(default=None, description="Encoded polyline string representing the spatial route geometry")
 
 
 class LLMMessage(BaseModel):
@@ -54,6 +54,12 @@ class TripApproval(BaseModel):
     )
 
 
+class ChargingApproval(BaseModel):
+    is_approved: bool = Field(
+        description="True if the user agrees to search for charging stations along the route. False if they decline or want something else."
+    )
+
+
 class VehicleState(BaseModel):
     battery_soc: int | None = Field(default=None, description="Battery in Percentage", le=100, ge=-1)
     range_left: int | None = Field(default=None, description="Estimated remaining range in kilometers")
@@ -68,6 +74,8 @@ class TripState(TypedDict):
     trip_details_confirmed: bool
     route_details_found: bool
     route_approved: bool
+    charging_search_pending: bool
+    charging_search_approved: bool
     charging_station: list
     vehicle_state: VehicleState
 
@@ -77,6 +85,7 @@ structured_llm_trip_details_extractor = llm.with_structured_output(TripDetails)
 structured_llm_vehicle_state_extractor = llm.with_structured_output(VehicleState)
 structured_llm_route_approval = llm.with_structured_output(RouteApproval)
 structured_llm_trip_approval = llm.with_structured_output(TripApproval)
+structured_llm_charging_approval = llm.with_structured_output(ChargingApproval)
 structured_llm_message = llm.with_structured_output(LLMMessage)
 
 
@@ -371,9 +380,19 @@ def gather_vehicle_state_information(state: TripState):
     print("gather_vehicle_state_information")
 
     prompt = f"""
-        You are an ev-trip planning agent
+        You are an intelligent EV trip-planning assistant, in the middle of an ongoing conversation.
 
-        Your job is to ask user about the battery and range left in there electric vehicle.
+        The user has just approved the route. Now ask for the current battery percentage and the estimated range left (in km) of their electric vehicle.
+
+        Current Vehicle State (already known, do not ask for these again):
+        {state["vehicle_state"]}
+
+        Conversation:
+        {state["messages"]}
+
+        Do not greet the user or introduce yourself. Do not repeat the trip or route details.
+        Keep it to one short, natural sentence that flows from the previous message.
+        If only one of battery or range is still missing, ask only for that one.
 
     """
     response = structured_llm_message.invoke(prompt)
@@ -402,10 +421,18 @@ def is_trip_possible_with_current_vehicle_state(state: TripState):
     current_vehicle_state = state['vehicle_state']
     route_details = state["route"]
 
-    if route_details["distance"] > current_vehicle_state.range_left:
-        return {"messages": [AIMessage(content="Your current range is insufficient for this distance. Searching for optimal charging stations along your path...")]}
+    if current_vehicle_state.range_left is None:
+        return {"messages": [AIMessage(content="I could not work out how far your vehicle can still go. Roughly how many kilometres of range do you have left?")]}
 
-    return {"messages": [AIMessage(content="You have enough range to reach your destination directly. No charging stops required!")]}  
+    if route_details["distance"] > current_vehicle_state.range_left:
+        message = (
+            f"Your current range of {current_vehicle_state.range_left:g} km is not enough to cover "
+            f"the {route_details['distance']:g} km trip, so you will need to charge along the way. "
+            "Shall I search for charging stations along your route?"
+        )
+        return {"messages": [AIMessage(content=message)], "charging_search_pending": True}
+
+    return {"messages": [AIMessage(content="You have enough range to reach your destination directly. No charging stops required!")]}
  
 
 def find_charging_stations(state: TripState):
@@ -417,11 +444,41 @@ def find_charging_stations(state: TripState):
 
     stations = get_charging_stations_along_route(geometry)
 
-    return {"charging_station": stations}
+    if stations:
+        message = f"I found {len(stations)} charging stations along your route. You can see the count in the sidebar."
+    else:
+        message = "I could not find any charging stations along your route. You may want to charge before you set off."
+
+    return {"charging_station": stations, "messages": [AIMessage(content=message)]}
+
+
+def charging_confirmation_extraction(state: TripState):
+    print("charging_confirmation_extraction")
+
+    prompt = f"""
+        The user was asked whether to search for charging stations along their route because their current range is not enough.
+        Determine if the user agreed to the search or declined.
+
+        Conversation: {state["messages"]}
+    """
+    response = structured_llm_charging_approval.invoke(prompt)
+
+    return {"charging_search_pending": False, "charging_search_approved": response.is_approved}
+
+
+def decline_charging_search(state: TripState):
+    print("decline_charging_search")
+
+    message = "No problem. Let me know if you would like to update your battery or range, or search for charging stations later."
+
+    return {"messages": [AIMessage(content=message)]}
 
 
 # routers
-def router_after_start(state: TripState) -> Literal["extract_trip_details", "trip_confirmation_extraction", "route_confirmation_extraction", "extract_vehicle_state_information"]:
+def router_after_start(state: TripState) -> Literal["extract_trip_details", "trip_confirmation_extraction", "route_confirmation_extraction", "charging_confirmation_extraction", "extract_vehicle_state_information"]:
+
+    if state['route_approved'] and state['charging_search_pending']:
+        return "charging_confirmation_extraction"
 
     if state['route_approved']:
         return "extract_vehicle_state_information"
@@ -468,15 +525,12 @@ def router_route_approval(state: TripState) -> Literal["gather_vehicle_state_inf
     return "gather_trip_details"
 
 
-def route_vehicle_state(state: TripState) -> Literal["find_charging_stations", END]:
+def router_charging_approval(state: TripState) -> Literal["find_charging_stations", "decline_charging_search"]:
 
-    current_vehicle_state = state['vehicle_state']
-    route_details = state["route"]
-    
-    if route_details["distance"] > current_vehicle_state.range_left:
+    if state["charging_search_approved"]:
         return "find_charging_stations"
-    
-    return END
+
+    return "decline_charging_search"
 
 
 graph = StateGraph(TripState)
@@ -493,6 +547,8 @@ graph.add_node("gather_vehicle_state_information", gather_vehicle_state_informat
 graph.add_node("extract_vehicle_state_information", extract_vehicle_state_information)
 graph.add_node("is_trip_possible_with_current_vehicle_state", is_trip_possible_with_current_vehicle_state)
 graph.add_node("find_charging_stations", find_charging_stations)
+graph.add_node("charging_confirmation_extraction", charging_confirmation_extraction)
+graph.add_node("decline_charging_search", decline_charging_search)
 
 graph.add_conditional_edges(START, router_after_start)
 graph.add_edge("extract_trip_details", "validate_trip_details")
@@ -506,7 +562,9 @@ graph.add_edge("ask_for_route_confirmation", END)
 graph.add_conditional_edges("route_confirmation_extraction", router_route_approval)
 graph.add_edge("gather_vehicle_state_information", END)
 graph.add_edge("extract_vehicle_state_information", "is_trip_possible_with_current_vehicle_state")
-graph.add_conditional_edges("is_trip_possible_with_current_vehicle_state", route_vehicle_state)
+graph.add_edge("is_trip_possible_with_current_vehicle_state", END)
+graph.add_conditional_edges("charging_confirmation_extraction", router_charging_approval)
+graph.add_edge("decline_charging_search", END)
 graph.add_edge("find_charging_stations", END)
 
 app_graph = graph.compile()
@@ -536,6 +594,7 @@ class ChatRequest(BaseModel):
     trip_details_confirmed: bool = False
     route_details_found: bool = False
     route_approved: bool = False
+    charging_search_pending: bool = False
     charging_station: list | None = None
     vehicle_state: VehicleState = Field(default_factory=VehicleState)
 
@@ -556,12 +615,14 @@ async def chat_endpoint(request: ChatRequest):
         # 2. Build current state
         current_state: TripState = {
             "trip": request.trip,
-            "route": request.route,
+            "route": request.route.model_dump() if request.route else None,
             "messages": langchain_messages,
             "trip_details_retrieved": request.trip_details_retrieved,
             "trip_details_confirmed": request.trip_details_confirmed,
             "route_details_found": request.route_details_found,
             "route_approved": request.route_approved,
+            "charging_search_pending": request.charging_search_pending,
+            "charging_search_approved": False,
             "charging_station": request.charging_station,
             "vehicle_state": request.vehicle_state,
         }
@@ -587,6 +648,7 @@ async def chat_endpoint(request: ChatRequest):
                 "trip_details_confirmed": output_state["trip_details_confirmed"],
                 "route_details_found": output_state["route_details_found"],
                 "route_approved": output_state["route_approved"],
+                "charging_search_pending": output_state["charging_search_pending"],
                 "charging_station": output_state["charging_station"],
                 "vehicle_state": output_state["vehicle_state"].model_dump(),
             }
