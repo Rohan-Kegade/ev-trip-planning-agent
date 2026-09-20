@@ -427,7 +427,7 @@ app_graph = graph.compile()
 
 # ==================== FastAPI Setup ====================
 
-app = FastAPI(title="EV Trip Planner API")
+app = FastAPI(title="Voltway API")
 
 app.add_middleware(
     CORSMiddleware,

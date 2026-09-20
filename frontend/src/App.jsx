@@ -39,6 +39,7 @@ export default function App() {
       ...graphState.messages,
       { role: 'user', content: userText }
     ];
+    setGraphState((prev) => ({ ...prev, messages: updatedMessages }));
 
     try {
       const payload = {
@@ -102,7 +103,7 @@ export default function App() {
         <div>
           <div className="flex items-center justify-between mb-6 pb-4 border-b">
             <h1 className="text-xl font-bold flex items-center gap-2 text-indigo-600">
-              <Zap className="w-6 h-6" /> EV Trip Planner
+              <img src="/logo.svg" alt="" className="w-8 h-8" /> Voltway
             </h1>
             <button 
               onClick={resetSession}
