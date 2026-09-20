@@ -10,9 +10,11 @@ const SUGGESTIONS = [
 ];
 
 const formatTime = (mins) => {
-  const h = Math.floor(mins / 60);
-  const m = Math.round(mins % 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  const total = Math.round(mins);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 };
 
 const Field = ({ label, value }) => (
@@ -214,6 +216,11 @@ export default function App() {
               }`}
             >
               <Route className={`w-3.5 h-3.5 ${hasRoute ? '' : 'text-indigo-500'}`} /> Route Summary
+              {hasRoute && (
+                <span className="ml-auto normal-case tracking-normal px-2 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-medium">
+                  {tripType ? 'Round trip total' : 'One way'}
+                </span>
+              )}
             </h2>
             <div className="grid grid-cols-2 gap-3">
               <div>

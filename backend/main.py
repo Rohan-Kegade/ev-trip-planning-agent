@@ -297,9 +297,12 @@ def find_route_details(state: TripState):
 
     route = get_route(trip.origin, trip.destination)
 
+    # A round trip covers the route twice; the geometry stays one-way (same road back)
+    multiplier = 2 if trip.is_round_trip else 1
+
     route_details = {
-        "distance": route["distance_km"],
-        "time": route["duration_minutes"],
+        "distance": round(route["distance_km"] * multiplier, 2),
+        "time": round(route["duration_minutes"] * multiplier, 1),
         "route_geometry": route["geometry"],
     }
 
@@ -309,14 +312,27 @@ def find_route_details(state: TripState):
 def ask_for_route_confirmation(state: TripState):
     print("ask_for_route_confirmation")
 
+    total_minutes = round(state["route"]["time"])
+    hours, minutes = divmod(total_minutes, 60)
+    time_parts = []
+    if hours:
+        time_parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes or not hours:
+        time_parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    time_text = " ".join(time_parts)
+    trip_kind = "round trip (total for going and coming back)" if state["trip"].is_round_trip else "one way"
+
     prompt = f"""
 
     You are an intelligent EV trip-planning assistant.
     Present the TRIP AND calculated ROUTE details to the user and ask if they want to proceed ahead with further planning.
-    Present distance in KM and Time in HOURS & MINUTES.
+    Use the distance and travel time below exactly as written. Do not convert, recalculate or round them.
+    State clearly whether the figures are for a one way trip or the total for a round trip.
 
     Current Trip: {state['trip']}
-    Route Details: {state['route']}
+    Trip Type: {trip_kind}
+    Distance: {state['route']['distance']} km
+    Travel Time: {time_text}
 
     """
     response = structured_llm_message.invoke(prompt)
