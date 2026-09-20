@@ -18,12 +18,12 @@ const formatTime = (mins) => {
 const Field = ({ label, value }) => (
   <div className="flex items-center justify-between gap-3 text-sm">
     <span className="text-slate-500 dark:text-slate-400">{label}</span>
-    <span className={`font-medium truncate ${value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'}`}>{value || '—'}</span>
+    <span className={`font-medium truncate ${value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>{value || '—'}</span>
   </div>
 );
 
 const BotAvatar = () => (
-  <span className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 text-white flex items-center justify-center shadow-md shadow-indigo-200">
+  <span className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-indigo-600 to-cyan-600 text-white flex items-center justify-center shadow-md shadow-indigo-200">
     <Bot className="w-4 h-4" />
   </span>
 );
@@ -164,7 +164,7 @@ export default function App() {
             <h1 className="text-xl font-bold tracking-tight flex items-center gap-2.5 text-slate-900 dark:text-white">
               <img src="/logo.svg" alt="" className="w-9 h-9 rounded-xl shadow-md shadow-indigo-300/50" />
               <span>
-                EV<span className="bg-gradient-to-r from-indigo-600 to-cyan-500 dark:from-indigo-400 dark:to-cyan-300 bg-clip-text text-transparent">Pilot</span>
+                EV<span className="bg-gradient-to-r from-indigo-600 to-cyan-600 dark:from-indigo-400 dark:to-cyan-300 bg-clip-text text-transparent">Pilot</span>
               </span>
             </h1>
             <div className="flex items-center gap-1">
@@ -172,7 +172,7 @@ export default function App() {
                 onClick={toggleTheme}
                 title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                 aria-label="Toggle theme"
-                className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
+                className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
               >
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
@@ -180,7 +180,7 @@ export default function App() {
                 onClick={resetSession}
                 title="New trip"
                 aria-label="New trip"
-                className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
+                className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
               >
                 <RefreshCw className="w-4 h-4" />
               </button>
@@ -189,7 +189,7 @@ export default function App() {
 
           {/* Trip Info Widget */}
           <section className="p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-2.5">
-            <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <h2 className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Trip Details
             </h2>
             <Field label="From" value={graphState.trip?.origin} />
@@ -204,30 +204,30 @@ export default function App() {
           <section
             className={`p-4 rounded-2xl transition-colors ${
               hasRoute
-                ? 'bg-gradient-to-br from-indigo-600 to-cyan-500 text-white shadow-lg shadow-indigo-300/40'
+                ? 'bg-gradient-to-br from-indigo-600 to-cyan-700 text-white shadow-lg shadow-indigo-300/40'
                 : 'bg-white dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 shadow-sm'
             }`}
           >
             <h2
               className={`text-[11px] font-semibold uppercase tracking-widest flex items-center gap-1.5 mb-3 ${
-                hasRoute ? 'text-white/70' : 'text-slate-400'
+                hasRoute ? 'text-white/90' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               <Route className={`w-3.5 h-3.5 ${hasRoute ? '' : 'text-indigo-500'}`} /> Route Summary
             </h2>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className={`text-2xl font-bold leading-none ${hasRoute ? '' : 'text-slate-300 dark:text-slate-600'}`}>
+                <p className={`text-2xl font-bold leading-none ${hasRoute ? '' : 'text-slate-500 dark:text-slate-400'}`}>
                   {hasRoute ? graphState.route.distance : '—'}
-                  {hasRoute && <span className="text-sm font-medium text-white/70 ml-1">km</span>}
+                  {hasRoute && <span className="text-sm font-medium text-white/90 ml-1">km</span>}
                 </p>
-                <p className={`text-xs mt-1 ${hasRoute ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>Distance</p>
+                <p className={`text-xs mt-1 ${hasRoute ? 'text-white/90' : 'text-slate-500 dark:text-slate-400'}`}>Distance</p>
               </div>
               <div>
-                <p className={`text-2xl font-bold leading-none ${hasRoute ? '' : 'text-slate-300 dark:text-slate-600'}`}>
+                <p className={`text-2xl font-bold leading-none ${hasRoute ? '' : 'text-slate-500 dark:text-slate-400'}`}>
                   {hasRoute ? formatTime(graphState.route.time) : '—'}
                 </p>
-                <p className={`text-xs mt-1 flex items-center gap-1 ${hasRoute ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>
+                <p className={`text-xs mt-1 flex items-center gap-1 ${hasRoute ? 'text-white/90' : 'text-slate-500 dark:text-slate-400'}`}>
                   <Clock className="w-3 h-3" /> Est. time
                 </p>
               </div>
@@ -236,13 +236,13 @@ export default function App() {
 
           {/* Vehicle Status Widget */}
           <section className="p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-3">
-            <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <h2 className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
               <Battery className="w-3.5 h-3.5 text-indigo-500" /> EV Battery
             </h2>
             <div>
               <div className="flex items-end justify-between mb-1.5">
                 <span className="text-sm text-slate-500 dark:text-slate-400">State of charge</span>
-                <span className={`text-lg font-bold leading-none ${hasSoc ? 'text-slate-900 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'}`}>
+                <span className={`text-lg font-bold leading-none ${hasSoc ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
                   {hasSoc ? `${socRaw}%` : '—'}
                 </span>
               </div>
@@ -265,7 +265,7 @@ export default function App() {
           )}
         </div>
 
-        <div className="text-[11px] text-slate-400 text-center pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 tracking-wide">
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 text-center pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 tracking-wide">
           AI EV Trip Planning Agent
         </div>
       </aside>
@@ -304,7 +304,7 @@ export default function App() {
                     <div
                       className={`max-w-[75%] px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap ${
                         isUser
-                          ? 'bg-gradient-to-br from-indigo-600 to-indigo-500 text-white rounded-2xl rounded-br-md shadow-md shadow-indigo-300/40'
+                          ? 'bg-gradient-to-br from-indigo-700 to-indigo-600 text-white rounded-2xl rounded-br-md shadow-md shadow-indigo-300/40'
                           : 'bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md shadow-sm'
                       }`}
                     >
@@ -340,13 +340,13 @@ export default function App() {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Type your trip details or response..."
-              className="flex-1 bg-transparent text-[15px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none"
+              className="flex-1 bg-transparent text-[15px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none"
             />
             <button
               type="submit"
               disabled={isLoading || !inputMessage.trim()}
               aria-label="Send"
-              className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-indigo-600 to-cyan-500 text-white flex items-center justify-center shadow-md shadow-indigo-300/50 hover:scale-105 active:scale-95 transition disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
+              className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-indigo-600 to-cyan-600 text-white flex items-center justify-center shadow-md shadow-indigo-300/50 hover:scale-105 active:scale-95 transition disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
             >
               <ArrowUp className="w-5 h-5" />
             </button>
