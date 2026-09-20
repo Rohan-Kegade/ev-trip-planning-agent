@@ -152,6 +152,7 @@ export default function App() {
   const socColor = soc > 50 ? 'bg-emerald-500' : soc > 20 ? 'bg-amber-500' : 'bg-rose-500';
   const rangeLeft = graphState.vehicle_state?.range_left;
   const tripType = graphState.trip?.is_round_trip;
+  const hasRoute = Boolean(graphState.route);
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-cyan-50/40 text-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-200 font-sans antialiased">
@@ -200,28 +201,38 @@ export default function App() {
           </section>
 
           {/* Route Stats Widget */}
-          {graphState.route && (
-            <section className="p-4 rounded-2xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-white shadow-lg shadow-indigo-300/40">
-              <h2 className="text-[11px] font-semibold text-white/70 uppercase tracking-widest flex items-center gap-1.5 mb-3">
-                <Route className="w-3.5 h-3.5" /> Route Summary
-              </h2>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-2xl font-bold leading-none">
-                    {graphState.route.distance}
-                    <span className="text-sm font-medium text-white/70 ml-1">km</span>
-                  </p>
-                  <p className="text-xs text-white/70 mt-1">Distance</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold leading-none">{formatTime(graphState.route.time)}</p>
-                  <p className="text-xs text-white/70 mt-1 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> Est. time
-                  </p>
-                </div>
+          <section
+            className={`p-4 rounded-2xl transition-colors ${
+              hasRoute
+                ? 'bg-gradient-to-br from-indigo-600 to-cyan-500 text-white shadow-lg shadow-indigo-300/40'
+                : 'bg-white dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 shadow-sm'
+            }`}
+          >
+            <h2
+              className={`text-[11px] font-semibold uppercase tracking-widest flex items-center gap-1.5 mb-3 ${
+                hasRoute ? 'text-white/70' : 'text-slate-400'
+              }`}
+            >
+              <Route className={`w-3.5 h-3.5 ${hasRoute ? '' : 'text-indigo-500'}`} /> Route Summary
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className={`text-2xl font-bold leading-none ${hasRoute ? '' : 'text-slate-300 dark:text-slate-600'}`}>
+                  {hasRoute ? graphState.route.distance : '—'}
+                  {hasRoute && <span className="text-sm font-medium text-white/70 ml-1">km</span>}
+                </p>
+                <p className={`text-xs mt-1 ${hasRoute ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>Distance</p>
               </div>
-            </section>
-          )}
+              <div>
+                <p className={`text-2xl font-bold leading-none ${hasRoute ? '' : 'text-slate-300 dark:text-slate-600'}`}>
+                  {hasRoute ? formatTime(graphState.route.time) : '—'}
+                </p>
+                <p className={`text-xs mt-1 flex items-center gap-1 ${hasRoute ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>
+                  <Clock className="w-3 h-3" /> Est. time
+                </p>
+              </div>
+            </div>
+          </section>
 
           {/* Vehicle Status Widget */}
           <section className="p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-3">
