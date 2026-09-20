@@ -48,6 +48,12 @@ class RouteApproval(BaseModel):
     )
 
 
+class TripApproval(BaseModel):
+    is_approved: bool = Field(
+        description="True if the user confirms the trip details are correct. False if they reject them or want to change something."
+    )
+
+
 class VehicleState(BaseModel):
     battery_soc: int | None = Field(default=None, description="Battery in Percentage", le=100, ge=-1)
     range_left: int | None = Field(default=None, description="Estimated remaining range in kilometers")
@@ -59,6 +65,7 @@ class TripState(TypedDict):
     route: RouteDetails
     messages: Annotated[list, add_messages]
     trip_details_retrieved: bool
+    trip_details_confirmed: bool
     route_details_found: bool
     route_approved: bool
     charging_station: list
@@ -69,6 +76,7 @@ class TripState(TypedDict):
 structured_llm_trip_details_extractor = llm.with_structured_output(TripDetails)
 structured_llm_vehicle_state_extractor = llm.with_structured_output(VehicleState)
 structured_llm_route_approval = llm.with_structured_output(RouteApproval)
+structured_llm_trip_approval = llm.with_structured_output(TripApproval)
 structured_llm_message = llm.with_structured_output(LLMMessage)
 
 
@@ -230,6 +238,8 @@ def gather_trip_details(state: TripState):
 
         If any required field is missing, ask the user, but only one question at a time.
 
+        If all fields are present but the user did not confirm them, ask what they would like to change.
+
         If the user has not decided where to go, help them decide.
 
         If the user's response is ambiguous or unclear, ask a follow-up question to clarify before proceeding. Do not make assumptions.
@@ -244,6 +254,40 @@ def gather_trip_details(state: TripState):
     response = structured_llm_message.invoke(prompt)
 
     return {"messages": [AIMessage(content=response.message)]}
+
+
+def ask_for_trip_confirmation(state: TripState):
+    print("ask_for_trip_confirmation")
+
+    prompt = f"""
+        You are an intelligent EV trip-planning assistant.
+        Present the trip details extracted so far to the user (origin, destination, and whether it is a round trip or one way).
+        Ask them to confirm that these are correct so you can calculate the route, distance and travel time.
+        Do not mention internal fields or technical details.
+
+        Trip: {state["trip"]}
+    """
+    response = structured_llm_message.invoke(prompt)
+
+    return {"messages": [AIMessage(content=response.message)]}
+
+
+def trip_confirmation_extraction(state: TripState):
+    print("trip_confirmation_extraction")
+
+    prompt = f"""
+        Determine if the user confirmed the trip details or wants to make changes.
+
+        Proposed Trip: {state["trip"]}
+        Conversation: {state["messages"]}
+    """
+    response = structured_llm_trip_approval.invoke(prompt)
+
+    if response.is_approved:
+        return {"trip_details_confirmed": True}
+
+    # Re-extract and re-validate on the next turn so any changes are picked up
+    return {"trip_details_confirmed": False, "trip_details_retrieved": False}
 
 
 def find_route_details(state: TripState):
@@ -293,7 +337,18 @@ def route_confirmation_extraction(state: TripState):
     """
     response = structured_llm_route_approval.invoke(prompt)
 
-    return { "route_approved": response.is_approved } 
+    if response.is_approved:
+        return {"route_approved": True}
+
+    # Rejected: clear route and confirmation flags so trip details are re-extracted
+    # and confirmed again on the next turn
+    return {
+        "route_approved": False,
+        "route": None,
+        "route_details_found": False,
+        "trip_details_retrieved": False,
+        "trip_details_confirmed": False,
+    }
 
 
 def gather_vehicle_state_information(state: TripState):
@@ -350,7 +405,7 @@ def find_charging_stations(state: TripState):
 
 
 # routers
-def router_after_start(state: TripState) -> Literal["extract_trip_details", "route_confirmation_extraction", "extract_vehicle_state_information"]:
+def router_after_start(state: TripState) -> Literal["extract_trip_details", "trip_confirmation_extraction", "route_confirmation_extraction", "extract_vehicle_state_information"]:
 
     if state['route_approved']:
         return "extract_vehicle_state_information"
@@ -359,12 +414,23 @@ def router_after_start(state: TripState) -> Literal["extract_trip_details", "rou
     if state['route_details_found']:
         return "route_confirmation_extraction"
 
+    if state['trip_details_retrieved'] and not state['trip_details_confirmed']:
+        return "trip_confirmation_extraction"
+
     return "extract_trip_details"
 
 
-def router_trip_details(state: TripState) -> Literal["gather_trip_details", "find_route_details"]:
+def router_trip_details(state: TripState) -> Literal["gather_trip_details", "ask_for_trip_confirmation"]:
 
     if state["trip_details_retrieved"]:
+        return "ask_for_trip_confirmation"
+
+    return "gather_trip_details"
+
+
+def router_trip_approval(state: TripState) -> Literal["find_route_details", "gather_trip_details"]:
+
+    if state["trip_details_confirmed"]:
         return "find_route_details"
 
     return "gather_trip_details"
@@ -402,6 +468,8 @@ graph = StateGraph(TripState)
 graph.add_node("extract_trip_details", extract_trip_details)
 graph.add_node("validate_trip_details", validate_trip_details)
 graph.add_node("gather_trip_details", gather_trip_details)
+graph.add_node("ask_for_trip_confirmation", ask_for_trip_confirmation)
+graph.add_node("trip_confirmation_extraction", trip_confirmation_extraction)
 graph.add_node("find_route_details", find_route_details)
 graph.add_node("ask_for_route_confirmation", ask_for_route_confirmation)
 graph.add_node("route_confirmation_extraction", route_confirmation_extraction)
@@ -413,7 +481,9 @@ graph.add_node("find_charging_stations", find_charging_stations)
 graph.add_conditional_edges(START, router_after_start)
 graph.add_edge("extract_trip_details", "validate_trip_details")
 graph.add_conditional_edges("validate_trip_details", router_trip_details)
-graph.add_edge("gather_trip_details", END)             
+graph.add_edge("gather_trip_details", END)
+graph.add_edge("ask_for_trip_confirmation", END)
+graph.add_conditional_edges("trip_confirmation_extraction", router_trip_approval)
 graph.add_edge("find_route_details", "ask_for_route_confirmation")
 graph.add_edge("ask_for_route_confirmation", END)
 
@@ -447,6 +517,7 @@ class ChatRequest(BaseModel):
     route: RouteDetails | None = None
     messages: list[ChatMessagePayload] = Field(default_factory=list)
     trip_details_retrieved: bool = False
+    trip_details_confirmed: bool = False
     route_details_found: bool = False
     route_approved: bool = False
     charging_station: list | None = None
@@ -472,6 +543,7 @@ async def chat_endpoint(request: ChatRequest):
             "route": request.route,
             "messages": langchain_messages,
             "trip_details_retrieved": request.trip_details_retrieved,
+            "trip_details_confirmed": request.trip_details_confirmed,
             "route_details_found": request.route_details_found,
             "route_approved": request.route_approved,
             "charging_station": request.charging_station,
@@ -496,6 +568,7 @@ async def chat_endpoint(request: ChatRequest):
                 "route": output_state["route"],
                 "messages": formatted_messages,
                 "trip_details_retrieved": output_state["trip_details_retrieved"],
+                "trip_details_confirmed": output_state["trip_details_confirmed"],
                 "route_details_found": output_state["route_details_found"],
                 "route_approved": output_state["route_approved"],
                 "charging_station": output_state["charging_station"],

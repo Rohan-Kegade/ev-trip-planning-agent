@@ -13,6 +13,7 @@ export default function App() {
     route: null,
     messages: [],
     trip_details_retrieved: false,
+    trip_details_confirmed: false,
     route_details_found: false,
     route_approved: false,
     charging_station: null,
@@ -48,6 +49,7 @@ export default function App() {
         route: graphState.route,
         messages: graphState.messages, // Pass prior history
         trip_details_retrieved: graphState.trip_details_retrieved,
+        trip_details_confirmed: graphState.trip_details_confirmed,
         route_details_found: graphState.route_details_found,
         route_approved: graphState.route_approved,
         charging_station: graphState.charging_station,
@@ -88,6 +90,7 @@ export default function App() {
       route: null,
       messages: [],
       trip_details_retrieved: false,
+      trip_details_confirmed: false,
       route_details_found: false,
       route_approved: false,
       charging_station: null,
