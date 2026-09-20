@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug } from 'lucide-react';
+import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug, Sun, Moon } from 'lucide-react';
 
 const API_URL = 'http://localhost:8000/chat';
 
@@ -17,8 +17,8 @@ const formatTime = (mins) => {
 
 const Field = ({ label, value }) => (
   <div className="flex items-center justify-between gap-3 text-sm">
-    <span className="text-slate-500">{label}</span>
-    <span className={`font-medium truncate ${value ? 'text-slate-900' : 'text-slate-300'}`}>{value || '—'}</span>
+    <span className="text-slate-500 dark:text-slate-400">{label}</span>
+    <span className={`font-medium truncate ${value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'}`}>{value || '—'}</span>
   </div>
 );
 
@@ -28,7 +28,18 @@ const BotAvatar = () => (
   </span>
 );
 
+const getInitialTheme = () => {
+  try {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch {
+    // localStorage unavailable
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+};
+
 export default function App() {
+  const [theme, setTheme] = useState(getInitialTheme);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -46,6 +57,18 @@ export default function App() {
   });
 
   const chatEndRef = useRef(null);
+
+  // Apply theme to <html> and remember the choice
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    try {
+      localStorage.setItem('theme', theme);
+    } catch {
+      // localStorage unavailable
+    }
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -131,29 +154,40 @@ export default function App() {
   const tripType = graphState.trip?.is_round_trip;
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-cyan-50/40 text-slate-800 font-sans antialiased">
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-cyan-50/40 text-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-200 font-sans antialiased">
 
       {/* Sidebar - Real-Time Graph State */}
-      <aside className="w-80 shrink-0 m-3 mr-0 rounded-3xl bg-white/80 backdrop-blur border border-slate-200/70 shadow-xl shadow-indigo-100/40 p-5 flex flex-col justify-between overflow-y-auto">
+      <aside className="w-80 shrink-0 m-3 mr-0 rounded-3xl bg-white/80 backdrop-blur border border-slate-200/70 shadow-xl shadow-indigo-100/40 dark:bg-slate-900/80 dark:border-slate-800 dark:shadow-black/30 p-5 flex flex-col justify-between overflow-y-auto">
         <div className="space-y-4">
           <div className="flex items-center justify-between pb-2">
-            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2.5 text-slate-900">
+            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2.5 text-slate-900 dark:text-white">
               <img src="/logo.svg" alt="" className="w-9 h-9 rounded-xl shadow-md shadow-indigo-300/50" />
               <span>
-                EV<span className="bg-gradient-to-r from-indigo-600 to-cyan-500 bg-clip-text text-transparent">Pilot</span>
+                EV<span className="bg-gradient-to-r from-indigo-600 to-cyan-500 dark:from-indigo-400 dark:to-cyan-300 bg-clip-text text-transparent">Pilot</span>
               </span>
             </h1>
-            <button
-              onClick={resetSession}
-              title="New trip"
-              className="p-2 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-indigo-50 transition"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleTheme}
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label="Toggle theme"
+                className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
+              >
+                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={resetSession}
+                title="New trip"
+                aria-label="New trip"
+                className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Trip Info Widget */}
-          <section className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-2.5">
+          <section className="p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-2.5">
             <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Trip Details
             </h2>
@@ -190,18 +224,18 @@ export default function App() {
           )}
 
           {/* Vehicle Status Widget */}
-          <section className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+          <section className="p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-3">
             <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
               <Battery className="w-3.5 h-3.5 text-indigo-500" /> EV Battery
             </h2>
             <div>
               <div className="flex items-end justify-between mb-1.5">
-                <span className="text-sm text-slate-500">State of charge</span>
-                <span className={`text-lg font-bold leading-none ${hasSoc ? 'text-slate-900' : 'text-slate-300'}`}>
+                <span className="text-sm text-slate-500 dark:text-slate-400">State of charge</span>
+                <span className={`text-lg font-bold leading-none ${hasSoc ? 'text-slate-900 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'}`}>
                   {hasSoc ? `${socRaw}%` : '—'}
                 </span>
               </div>
-              <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
                 <div className={`h-full rounded-full transition-all duration-700 ${socColor}`} style={{ width: `${soc}%` }} />
               </div>
             </div>
@@ -213,14 +247,14 @@ export default function App() {
 
           {/* Found Stations Counter */}
           {graphState.charging_station && graphState.charging_station.length > 0 && (
-            <div className="p-4 bg-emerald-50 text-emerald-800 rounded-2xl border border-emerald-200/80 text-sm flex items-center gap-3">
-              <span className="p-2 rounded-xl bg-emerald-100"><Plug className="w-4 h-4" /></span>
+            <div className="p-4 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-2xl border border-emerald-200/80 dark:border-emerald-900 text-sm flex items-center gap-3">
+              <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/60"><Plug className="w-4 h-4" /></span>
               <span><strong>{graphState.charging_station.length}</strong> charging stations found along your route</span>
             </div>
           )}
         </div>
 
-        <div className="text-[11px] text-slate-400 text-center pt-5 mt-5 border-t border-slate-100 tracking-wide">
+        <div className="text-[11px] text-slate-400 text-center pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 tracking-wide">
           AI EV Trip Planning Agent
         </div>
       </aside>
@@ -234,8 +268,8 @@ export default function App() {
             {graphState.messages.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center">
                 <img src="/logo.svg" alt="" className="w-20 h-20 rounded-3xl shadow-xl shadow-indigo-300/50 mb-6" />
-                <h2 className="text-3xl font-bold tracking-tight text-slate-900">Where to next?</h2>
-                <p className="text-slate-500 mt-2 max-w-md">
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Where to next?</h2>
+                <p className="text-slate-500 dark:text-slate-400 mt-2 max-w-md">
                   Tell me where you&apos;re headed and I&apos;ll plan the route, check your range and find charging stops.
                 </p>
                 <div className="flex flex-wrap justify-center gap-2 mt-8">
@@ -243,7 +277,7 @@ export default function App() {
                     <button
                       key={text}
                       onClick={() => setInputMessage(text)}
-                      className="px-4 py-2 rounded-full bg-white border border-slate-200 text-sm text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md transition flex items-center gap-1.5"
+                      className="px-4 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:border-indigo-300 dark:hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:shadow-md transition flex items-center gap-1.5"
                     >
                       <Sparkles className="w-3.5 h-3.5" /> {text}
                     </button>
@@ -260,7 +294,7 @@ export default function App() {
                       className={`max-w-[75%] px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap ${
                         isUser
                           ? 'bg-gradient-to-br from-indigo-600 to-indigo-500 text-white rounded-2xl rounded-br-md shadow-md shadow-indigo-300/40'
-                          : 'bg-white text-slate-800 border border-slate-200/80 rounded-2xl rounded-bl-md shadow-sm'
+                          : 'bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md shadow-sm'
                       }`}
                     >
                       {msg.content}
@@ -273,10 +307,10 @@ export default function App() {
             {isLoading && (
               <div className="flex items-end gap-2.5 msg-in">
                 <BotAvatar />
-                <div className="bg-white border border-slate-200/80 rounded-2xl rounded-bl-md px-4 py-3.5 shadow-sm flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-slate-300 animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-2 h-2 rounded-full bg-slate-300 animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-2 h-2 rounded-full bg-slate-300 animate-bounce" />
+                <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md px-4 py-3.5 shadow-sm flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-500 animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-500 animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-500 animate-bounce" />
                 </div>
               </div>
             )}
@@ -288,14 +322,14 @@ export default function App() {
         <div className="px-6 pb-6 pt-2">
           <form
             onSubmit={handleSendMessage}
-            className="max-w-3xl mx-auto flex items-center gap-2 p-2 pl-5 bg-white rounded-full border border-slate-200 shadow-lg shadow-indigo-100/50 focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-100 transition"
+            className="max-w-3xl mx-auto flex items-center gap-2 p-2 pl-5 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:focus-within:ring-indigo-500/20 transition"
           >
             <input
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Type your trip details or response..."
-              className="flex-1 bg-transparent text-[15px] placeholder:text-slate-400 focus:outline-none"
+              className="flex-1 bg-transparent text-[15px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none"
             />
             <button
               type="submit"
