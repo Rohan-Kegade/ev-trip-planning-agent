@@ -60,6 +60,7 @@ export default function App() {
   });
 
   const chatEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   // Apply theme to <html> and remember the choice
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function App() {
 
     const userText = text;
     setInputMessage('');
+    inputRef.current?.focus();
     setIsLoading(true);
 
     // Optimistically add user message to chat feed
@@ -271,10 +273,16 @@ export default function App() {
           </section>
 
           {/* Found Stations Counter */}
+          {Array.isArray(graphState.charging_station) && graphState.charging_station.length === 0 && (
+            <div className="p-4 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300 rounded-2xl border border-amber-200/80 dark:border-amber-900 text-sm flex items-center gap-3">
+              <span className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/60"><Plug className="w-4 h-4" /></span>
+              <span>No charging stations found along your route</span>
+            </div>
+          )}
           {graphState.charging_station && graphState.charging_station.length > 0 && (
             <div className="p-4 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-2xl border border-emerald-200/80 dark:border-emerald-900 text-sm flex items-center gap-3">
               <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/60"><Plug className="w-4 h-4" /></span>
-              <span><strong>{graphState.charging_station.length}</strong> charging stations found along your route</span>
+              <span><strong>{graphState.charging_station.length}</strong> charging station{graphState.charging_station.length !== 1 ? 's' : ''} found along your route</span>
             </div>
           )}
         </div>
@@ -354,6 +362,7 @@ export default function App() {
             className="max-w-3xl mx-auto flex items-center gap-2 p-2 pl-5 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:focus-within:ring-indigo-500/20 transition"
           >
             <input
+              ref={inputRef}
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}

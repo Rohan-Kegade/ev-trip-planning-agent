@@ -141,13 +141,17 @@ def get_route(origin: str, destination: str):
     }
 
 
+class ChargingServiceError(Exception):
+    """Raised when the charging station service could not be reached for any point on the route."""
+
+
 def get_charging_stations_along_route(
     geometry: str, sample_interval: int = 30, search_radius_km: int = 5
 ):
     coordinates = polyline.decode(geometry)
 
     if not coordinates:
-        return []
+        return [], 0
 
     sampled_coordinates = coordinates[::sample_interval]
 
@@ -155,6 +159,7 @@ def get_charging_stations_along_route(
         sampled_coordinates.append(coordinates[-1])
 
     stations = {}
+    failed_lookups = 0
     url = "https://api.openchargemap.io/v3/poi/"
     headers = {"X-API-Key": OCM_API_KEY, "User-Agent": "EV-Trip_Planner"}
 
@@ -168,12 +173,18 @@ def get_charging_stations_along_route(
             "compact": True,
         }
 
-        response = requests.get(url, headers=headers, params=params, timeout=15)
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            data = response.json() if response.status_code == 200 else None
+        except (requests.RequestException, ValueError):
+            data = None
 
-        if response.status_code != 200:
+        # A failed lookup is not the same as "no stations here", so count it separately
+        if not isinstance(data, list):
+            failed_lookups += 1
             continue
 
-        for station in response.json():
+        for station in data:
             station_id = station.get("ID")
             if not station_id:
                 continue
@@ -190,7 +201,10 @@ def get_charging_stations_along_route(
                 "address": address.get("AddressLine1"),
             }
 
-    return list(stations.values())
+    if failed_lookups == len(sampled_coordinates):
+        raise ChargingServiceError("Could not reach the charging station service")
+
+    return list(stations.values()), failed_lookups
 
 
 # nodes
@@ -442,12 +456,22 @@ def find_charging_stations(state: TripState):
 
     geometry = route.get("route_geometry")
 
-    stations = get_charging_stations_along_route(geometry)
+    try:
+        stations, failed_lookups = get_charging_stations_along_route(geometry)
+    except ChargingServiceError:
+        # Keep the question open so a "yes" retries the search
+        message = "I could not reach the charging station service right now, so I could not check your route. Would you like me to try again?"
+        return {"messages": [AIMessage(content=message)], "charging_search_pending": True}
 
     if stations:
-        message = f"I found {len(stations)} charging stations along your route. You can see the count in the sidebar."
+        message = f"I found {len(stations)} charging station{'s' if len(stations) != 1 else ''} along your route. You can see the count in the sidebar."
+        if failed_lookups:
+            message += " Some parts of the route could not be checked, so there may be more stations than I found."
     else:
-        message = "I could not find any charging stations along your route. You may want to charge before you set off."
+        message = (
+            "I searched along your route but did not find any charging stations. "
+            "You may want to charge before you set off, or consider a different route."
+        )
 
     return {"charging_station": stations, "messages": [AIMessage(content=message)]}
 
