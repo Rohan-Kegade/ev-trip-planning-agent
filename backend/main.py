@@ -497,7 +497,7 @@ app_graph = graph.compile()
 
 # ==================== FastAPI Setup ====================
 
-app = FastAPI(title="Voltway API")
+app = FastAPI(title="EVPilot API")
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,12 +1,37 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Battery, MapPin, Zap, RefreshCw } from 'lucide-react';
+import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug } from 'lucide-react';
 
 const API_URL = 'http://localhost:8000/chat';
+
+const SUGGESTIONS = [
+  'Trip from Seattle to Portland',
+  'Plan a round trip to Los Angeles',
+  'Help me pick a weekend destination',
+];
+
+const formatTime = (mins) => {
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+};
+
+const Field = ({ label, value }) => (
+  <div className="flex items-center justify-between gap-3 text-sm">
+    <span className="text-slate-500">{label}</span>
+    <span className={`font-medium truncate ${value ? 'text-slate-900' : 'text-slate-300'}`}>{value || '—'}</span>
+  </div>
+);
+
+const BotAvatar = () => (
+  <span className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 text-white flex items-center justify-center shadow-md shadow-indigo-200">
+    <Bot className="w-4 h-4" />
+  </span>
+);
 
 export default function App() {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Entire LangGraph state maintained locally
   const [graphState, setGraphState] = useState({
     trip: { origin: null, destination: null, is_round_trip: null },
@@ -98,128 +123,187 @@ export default function App() {
     });
   };
 
+  const socRaw = graphState.vehicle_state?.battery_soc;
+  const hasSoc = socRaw !== null && socRaw !== undefined;
+  const soc = hasSoc ? Math.max(0, Math.min(100, socRaw)) : 0;
+  const socColor = soc > 50 ? 'bg-emerald-500' : soc > 20 ? 'bg-amber-500' : 'bg-rose-500';
+  const rangeLeft = graphState.vehicle_state?.range_left;
+  const tripType = graphState.trip?.is_round_trip;
+
   return (
-    <div className="flex h-screen bg-slate-100 text-slate-800 font-sans">
-      
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-cyan-50/40 text-slate-800 font-sans antialiased">
+
       {/* Sidebar - Real-Time Graph State */}
-      <aside className="w-80 bg-white border-r border-slate-200 p-4 flex flex-col justify-between overflow-y-auto">
-        <div>
-          <div className="flex items-center justify-between mb-6 pb-4 border-b">
-            <h1 className="text-xl font-bold flex items-center gap-2 text-indigo-600">
-              <img src="/logo.svg" alt="" className="w-8 h-8" /> Voltway
+      <aside className="w-80 shrink-0 m-3 mr-0 rounded-3xl bg-white/80 backdrop-blur border border-slate-200/70 shadow-xl shadow-indigo-100/40 p-5 flex flex-col justify-between overflow-y-auto">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pb-2">
+            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2.5 text-slate-900">
+              <img src="/logo.svg" alt="" className="w-9 h-9 rounded-xl shadow-md shadow-indigo-300/50" />
+              <span>
+                EV<span className="bg-gradient-to-r from-indigo-600 to-cyan-500 bg-clip-text text-transparent">Pilot</span>
+              </span>
             </h1>
-            <button 
+            <button
               onClick={resetSession}
-              title="Reset Session"
-              className="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition"
+              title="New trip"
+              className="p-2 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-indigo-50 transition"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
 
           {/* Trip Info Widget */}
-          <div className="mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5" /> Trip Details
+          <section className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-2.5">
+            <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Trip Details
             </h2>
-            <div className="space-y-1 text-sm">
-              <p><span className="text-slate-500">From:</span> <strong className="text-slate-700">{graphState.trip?.origin || '—'}</strong></p>
-              <p><span className="text-slate-500">To:</span> <strong className="text-slate-700">{graphState.trip?.destination || '—'}</strong></p>
-              <p><span className="text-slate-500">Type:</span> <strong className="text-slate-700">{graphState.trip?.is_round_trip !== null ? (graphState.trip.is_round_trip ? 'Round Trip' : 'One Way') : '—'}</strong></p>
-            </div>
-          </div>
+            <Field label="From" value={graphState.trip?.origin} />
+            <Field label="To" value={graphState.trip?.destination} />
+            <Field
+              label="Type"
+              value={tripType !== null && tripType !== undefined ? (tripType ? 'Round trip' : 'One way') : null}
+            />
+          </section>
 
           {/* Route Stats Widget */}
           {graphState.route && (
-            <div className="mb-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-              <h2 className="text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-2">Route Summary</h2>
-              <div className="space-y-1 text-sm">
-                <p><span className="text-indigo-600">Distance:</span> <strong>{graphState.route.distance} km</strong></p>
-                <p><span className="text-indigo-600">Est. Time:</span> <strong>{graphState.route.time} mins</strong></p>
+            <section className="p-4 rounded-2xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-white shadow-lg shadow-indigo-300/40">
+              <h2 className="text-[11px] font-semibold text-white/70 uppercase tracking-widest flex items-center gap-1.5 mb-3">
+                <Route className="w-3.5 h-3.5" /> Route Summary
+              </h2>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-2xl font-bold leading-none">
+                    {graphState.route.distance}
+                    <span className="text-sm font-medium text-white/70 ml-1">km</span>
+                  </p>
+                  <p className="text-xs text-white/70 mt-1">Distance</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold leading-none">{formatTime(graphState.route.time)}</p>
+                  <p className="text-xs text-white/70 mt-1 flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Est. time
+                  </p>
+                </div>
               </div>
-            </div>
+            </section>
           )}
 
           {/* Vehicle Status Widget */}
-          <div className="mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-              <Battery className="w-3.5 h-3.5" /> EV Battery
+          <section className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+            <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <Battery className="w-3.5 h-3.5 text-indigo-500" /> EV Battery
             </h2>
-            <div className="space-y-1 text-sm">
-              <p><span className="text-slate-500">State of Charge:</span> <strong className="text-slate-700">{graphState.vehicle_state?.battery_soc !== null ? `${graphState.vehicle_state.battery_soc}%` : '—'}</strong></p>
-              <p><span className="text-slate-500">Range Left:</span> <strong className="text-slate-700">{graphState.vehicle_state?.range_left !== null ? `${graphState.vehicle_state.range_left} km` : '—'}</strong></p>
+            <div>
+              <div className="flex items-end justify-between mb-1.5">
+                <span className="text-sm text-slate-500">State of charge</span>
+                <span className={`text-lg font-bold leading-none ${hasSoc ? 'text-slate-900' : 'text-slate-300'}`}>
+                  {hasSoc ? `${socRaw}%` : '—'}
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div className={`h-full rounded-full transition-all duration-700 ${socColor}`} style={{ width: `${soc}%` }} />
+              </div>
             </div>
-          </div>
+            <Field
+              label="Range left"
+              value={rangeLeft !== null && rangeLeft !== undefined ? `${rangeLeft} km` : null}
+            />
+          </section>
 
           {/* Found Stations Counter */}
           {graphState.charging_station && graphState.charging_station.length > 0 && (
-            <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 text-sm">
-              ⚡ Found <strong>{graphState.charging_station.length}</strong> charging stations along route.
+            <div className="p-4 bg-emerald-50 text-emerald-800 rounded-2xl border border-emerald-200/80 text-sm flex items-center gap-3">
+              <span className="p-2 rounded-xl bg-emerald-100"><Plug className="w-4 h-4" /></span>
+              <span><strong>{graphState.charging_station.length}</strong> charging stations found along your route</span>
             </div>
           )}
         </div>
 
-        <div className="text-xs text-slate-400 text-center pt-4 border-t">
-          Stateless FastAPI + LangGraph
+        <div className="text-[11px] text-slate-400 text-center pt-5 mt-5 border-t border-slate-100 tracking-wide">
+          AI EV Trip Planning Agent
         </div>
       </aside>
 
       {/* Main Chat Interface */}
-      <main className="flex-1 flex flex-col h-full bg-slate-50">
-        
+      <main className="flex-1 flex flex-col h-full min-w-0">
+
         {/* Messages Feed */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {graphState.messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400">
-              <Zap className="w-12 h-12 mb-2 text-slate-300" />
-              <p>Start by typing where you want to go (e.g., "Trip from Seattle to Portland")</p>
-            </div>
-          ) : (
-            graphState.messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-xl rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                    msg.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-br-none'
-                      : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'
-                  }`}
-                >
-                  {msg.content}
+        <div className="flex-1 overflow-y-auto px-6 pt-8 pb-4">
+          <div className="max-w-3xl mx-auto space-y-5 min-h-full flex flex-col">
+            {graphState.messages.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center">
+                <img src="/logo.svg" alt="" className="w-20 h-20 rounded-3xl shadow-xl shadow-indigo-300/50 mb-6" />
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900">Where to next?</h2>
+                <p className="text-slate-500 mt-2 max-w-md">
+                  Tell me where you&apos;re headed and I&apos;ll plan the route, check your range and find charging stops.
+                </p>
+                <div className="flex flex-wrap justify-center gap-2 mt-8">
+                  {SUGGESTIONS.map((text) => (
+                    <button
+                      key={text}
+                      onClick={() => setInputMessage(text)}
+                      className="px-4 py-2 rounded-full bg-white border border-slate-200 text-sm text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md transition flex items-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" /> {text}
+                    </button>
+                  ))}
                 </div>
               </div>
-            ))
-          )}
+            ) : (
+              graphState.messages.map((msg, idx) => {
+                const isUser = msg.role === 'user';
+                return (
+                  <div key={idx} className={`flex items-end gap-2.5 msg-in ${isUser ? 'justify-end' : 'justify-start'}`}>
+                    {!isUser && <BotAvatar />}
+                    <div
+                      className={`max-w-[75%] px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap ${
+                        isUser
+                          ? 'bg-gradient-to-br from-indigo-600 to-indigo-500 text-white rounded-2xl rounded-br-md shadow-md shadow-indigo-300/40'
+                          : 'bg-white text-slate-800 border border-slate-200/80 rounded-2xl rounded-bl-md shadow-sm'
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                );
+              })
+            )}
 
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-slate-200 text-slate-400 rounded-2xl rounded-bl-none px-4 py-3 text-sm shadow-sm flex items-center gap-2">
-                <span className="animate-pulse">Thinking...</span>
+            {isLoading && (
+              <div className="flex items-end gap-2.5 msg-in">
+                <BotAvatar />
+                <div className="bg-white border border-slate-200/80 rounded-2xl rounded-bl-md px-4 py-3.5 shadow-sm flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-slate-300 animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-2 h-2 rounded-full bg-slate-300 animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-2 h-2 rounded-full bg-slate-300 animate-bounce" />
+                </div>
               </div>
-            </div>
-          )}
-          <div ref={chatEndRef} />
+            )}
+            <div ref={chatEndRef} />
+          </div>
         </div>
 
         {/* Message Input Bar */}
-        <div className="p-4 bg-white border-t border-slate-200">
-          <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex gap-2">
+        <div className="px-6 pb-6 pt-2">
+          <form
+            onSubmit={handleSendMessage}
+            className="max-w-3xl mx-auto flex items-center gap-2 p-2 pl-5 bg-white rounded-full border border-slate-200 shadow-lg shadow-indigo-100/50 focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-100 transition"
+          >
             <input
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Type your trip details or response..."
-              className="flex-1 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-              // disabled={isLoading}
+              className="flex-1 bg-transparent text-[15px] placeholder:text-slate-400 focus:outline-none"
             />
             <button
               type="submit"
               disabled={isLoading || !inputMessage.trim()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl transition font-medium text-sm flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Send"
+              className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-indigo-600 to-cyan-500 text-white flex items-center justify-center shadow-md shadow-indigo-300/50 hover:scale-105 active:scale-95 transition disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
             >
-              <Send className="w-4 h-4" /> Send
+              <ArrowUp className="w-5 h-5" />
             </button>
           </form>
         </div>
