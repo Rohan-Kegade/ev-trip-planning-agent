@@ -56,6 +56,7 @@ export default function App() {
     route_approved: false,
     charging_search_pending: false,
     charging_station: null,
+    charging_plan: null,
     vehicle_state: { battery_soc: null, range_left: null },
   });
 
@@ -106,6 +107,7 @@ export default function App() {
         route_approved: graphState.route_approved,
         charging_search_pending: graphState.charging_search_pending,
         charging_station: graphState.charging_station,
+        charging_plan: graphState.charging_plan,
         vehicle_state: graphState.vehicle_state,
       };
 
@@ -153,6 +155,7 @@ export default function App() {
       route_approved: false,
       charging_search_pending: false,
       charging_station: null,
+      charging_plan: null,
       vehicle_state: { battery_soc: null, range_left: null },
     });
   };
@@ -272,6 +275,48 @@ export default function App() {
             />
           </section>
 
+          {/* Charging Plan */}
+          {graphState.charging_plan && (
+            <section className="p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-3">
+              <h2 className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Plug className="w-3.5 h-3.5 text-indigo-500" /> Charging Plan
+              </h2>
+
+              {graphState.charging_plan.stops.length > 0 && (
+                <ol className="space-y-3">
+                  {graphState.charging_plan.stops.map((stop, i) => (
+                    <li key={`${stop.id}-${stop.km}`} className="flex gap-3">
+                      <span className="w-6 h-6 shrink-0 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 text-sm">
+                        <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{stop.name || 'Charging station'}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {[stop.town, `km ${stop.km}`, graphState.charging_plan.round_trip ? `${stop.leg} leg` : null].filter(Boolean).join(' · ')}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {stop.arrival_soc}% → {stop.charge_to}% · ~{formatTime(stop.charge_minutes)}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              {graphState.charging_plan.feasible ? (
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-700 space-y-2">
+                  <Field label="Finish with" value={`${graphState.charging_plan.arrival_soc}%`} />
+                  <Field label="Charging" value={formatTime(graphState.charging_plan.charge_minutes)} />
+                  <Field label="Total time" value={formatTime(graphState.charging_plan.total_minutes)} />
+                </div>
+              ) : (
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  No reachable stations between km {graphState.charging_plan.gap?.from_km} and km {graphState.charging_plan.gap?.to_km}
+                </p>
+              )}
+            </section>
+          )}
+
           {/* Found Stations Counter */}
           {Array.isArray(graphState.charging_station) && graphState.charging_station.length === 0 && (
             <div className="p-4 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300 rounded-2xl border border-amber-200/80 dark:border-amber-900 text-sm flex items-center gap-3">
@@ -279,7 +324,7 @@ export default function App() {
               <span>No charging stations found along your route</span>
             </div>
           )}
-          {graphState.charging_station && graphState.charging_station.length > 0 && (
+          {!graphState.charging_plan && graphState.charging_station && graphState.charging_station.length > 0 && (
             <div className="p-4 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-2xl border border-emerald-200/80 dark:border-emerald-900 text-sm flex items-center gap-3">
               <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/60"><Plug className="w-4 h-4" /></span>
               <span><strong>{graphState.charging_station.length}</strong> charging station{graphState.charging_station.length !== 1 ? 's' : ''} found along your route</span>

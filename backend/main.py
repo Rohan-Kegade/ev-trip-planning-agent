@@ -8,6 +8,8 @@ from langchain_core.messages import HumanMessage, AIMessage
 import os
 import requests
 import polyline
+from concurrent.futures import ThreadPoolExecutor
+from planner import build_charging_plan, format_duration, format_plan_message, sample_route
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -60,6 +62,12 @@ class ChargingApproval(BaseModel):
     )
 
 
+class PlanApproval(BaseModel):
+    is_approved: bool = Field(
+        description="True if the user wants the complete charging plan. False if they decline or ask about something else."
+    )
+
+
 class VehicleState(BaseModel):
     battery_soc: int | None = Field(default=None, description="Battery in Percentage", le=100, ge=-1)
     range_left: int | None = Field(default=None, description="Estimated remaining range in kilometers")
@@ -77,6 +85,8 @@ class TripState(TypedDict):
     charging_search_pending: bool
     charging_search_approved: bool
     charging_station: list
+    charging_plan: dict
+    charging_plan_approved: bool
     vehicle_state: VehicleState
 
 
@@ -86,6 +96,7 @@ structured_llm_vehicle_state_extractor = llm.with_structured_output(VehicleState
 structured_llm_route_approval = llm.with_structured_output(RouteApproval)
 structured_llm_trip_approval = llm.with_structured_output(TripApproval)
 structured_llm_charging_approval = llm.with_structured_output(ChargingApproval)
+structured_llm_plan_approval = llm.with_structured_output(PlanApproval)
 structured_llm_message = llm.with_structured_output(LLMMessage)
 
 
@@ -141,29 +152,34 @@ def get_route(origin: str, destination: str):
     }
 
 
+# Charging station lookup tuning
+SAMPLE_SPACING_KM = 8         # one lookup roughly every 8 km (search circles of 5 km radius overlap)
+MAX_PARALLEL_LOOKUPS = 8      # lookups run concurrently
+LOOKUP_TIMEOUT_SECONDS = 10
+
+
 class ChargingServiceError(Exception):
     """Raised when the charging station service could not be reached for any point on the route."""
 
 
-def get_charging_stations_along_route(
-    geometry: str, sample_interval: int = 30, search_radius_km: int = 5
-):
+def get_charging_stations_along_route(geometry: str, search_radius_km: int = 5):
     coordinates = polyline.decode(geometry)
 
     if not coordinates:
         return [], 0
 
-    sampled_coordinates = coordinates[::sample_interval]
-
-    if coordinates[-1] not in sampled_coordinates:
-        sampled_coordinates.append(coordinates[-1])
+    # Sample by distance, not by point count: routing polylines are very dense
+    sampled_coordinates = sample_route(coordinates, SAMPLE_SPACING_KM)
 
     stations = {}
     failed_lookups = 0
     url = "https://api.openchargemap.io/v3/poi/"
     headers = {"X-API-Key": OCM_API_KEY, "User-Agent": "EV-Trip_Planner"}
 
-    for lat, lon in sampled_coordinates:
+    session = requests.Session()
+
+    def lookup(point):
+        lat, lon = point
         params = {
             "latitude": lat,
             "longitude": lon,
@@ -174,11 +190,15 @@ def get_charging_stations_along_route(
         }
 
         try:
-            response = requests.get(url, headers=headers, params=params, timeout=15)
-            data = response.json() if response.status_code == 200 else None
+            response = session.get(url, headers=headers, params=params, timeout=LOOKUP_TIMEOUT_SECONDS)
+            return response.json() if response.status_code == 200 else None
         except (requests.RequestException, ValueError):
-            data = None
+            return None
 
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_LOOKUPS) as pool:
+        results = list(pool.map(lookup, sampled_coordinates))
+
+    for data in results:
         # A failed lookup is not the same as "no stations here", so count it separately
         if not isinstance(data, list):
             failed_lookups += 1
@@ -335,14 +355,7 @@ def find_route_details(state: TripState):
 def ask_for_route_confirmation(state: TripState):
     print("ask_for_route_confirmation")
 
-    total_minutes = round(state["route"]["time"])
-    hours, minutes = divmod(total_minutes, 60)
-    time_parts = []
-    if hours:
-        time_parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
-    if minutes or not hours:
-        time_parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
-    time_text = " ".join(time_parts)
+    time_text = format_duration(state["route"]["time"])
     trip_kind = "round trip (total for going and coming back)" if state["trip"].is_round_trip else "one way"
 
     prompt = f"""
@@ -464,14 +477,20 @@ def find_charging_stations(state: TripState):
         return {"messages": [AIMessage(content=message)], "charging_search_pending": True}
 
     if stations:
-        message = f"I found {len(stations)} charging station{'s' if len(stations) != 1 else ''} along your route. You can see the count in the sidebar."
+        count = len(stations)
+        message = f"Good news, I found {count} charging station{'s' if count != 1 else ''} along your route."
         if failed_lookups:
-            message += " Some parts of the route could not be checked, so there may be more stations than I found."
-    else:
-        message = (
-            "I searched along your route but did not find any charging stations. "
-            "You may want to charge before you set off, or consider a different route."
+            message += " Some parts of the route could not be checked, so there may be more."
+        message += (
+            " Would you like a complete charging plan, with where to stop, how long to charge at each stop "
+            "and your estimated total travel time?"
         )
+        return {"charging_station": stations, "messages": [AIMessage(content=message)]}
+
+    message = (
+        "I searched along your route but did not find any charging stations. "
+        "You may want to charge before you set off, or consider a different route."
+    )
 
     return {"charging_station": stations, "messages": [AIMessage(content=message)]}
 
@@ -498,8 +517,84 @@ def decline_charging_search(state: TripState):
     return {"messages": [AIMessage(content=message)]}
 
 
+def plan_confirmation_extraction(state: TripState):
+    print("plan_confirmation_extraction")
+
+    prompt = f"""
+        The user was told that charging stations were found along their route and was asked whether they want a complete charging plan.
+        Determine if the user now wants the complete charging plan or not.
+
+        Conversation: {state["messages"]}
+    """
+    response = structured_llm_plan_approval.invoke(prompt)
+
+    return {"charging_plan_approved": response.is_approved}
+
+
+def decline_charging_plan(state: TripState):
+    print("decline_charging_plan")
+
+    message = "No problem. Just ask whenever you would like a complete charging plan."
+
+    return {"messages": [AIMessage(content=message)]}
+
+
+def plan_charging_stops(state: TripState):
+    print("plan_charging_stops")
+
+    route = state["route"]
+    trip = state["trip"]
+    vehicle_state = state["vehicle_state"]
+
+    points = polyline.decode(route["route_geometry"])
+    # The stored distance already covers both directions for a round trip
+    one_way_km = route["distance"] / (2 if trip.is_round_trip else 1)
+
+    plan = build_charging_plan(
+        points=points,
+        stations=state["charging_station"],
+        one_way_km=one_way_km,
+        drive_minutes=route["time"],
+        is_round_trip=trip.is_round_trip,
+        range_left_km=vehicle_state.range_left,
+        battery_soc=vehicle_state.battery_soc,
+    )
+
+    return {"charging_plan": plan, "messages": [AIMessage(content=format_plan_message(plan))]}
+
+
+def answer_plan_followup(state: TripState):
+    print("answer_plan_followup")
+
+    prompt = f"""
+        You are an intelligent EV trip-planning assistant. The charging plan below has already been shared with the user.
+
+        Answer the user's latest message using only this plan and the conversation. Do not invent stations, distances, battery levels or times.
+        If the user wants to plan a different trip, tell them to press the new trip button in the sidebar.
+        Do not answer anything unrelated to EV trip planning.
+
+        Trip: {state["trip"]}
+
+        Charging plan:
+        {format_plan_message(state["charging_plan"])}
+
+        Conversation:
+        {state["messages"]}
+    """
+    response = structured_llm_message.invoke(prompt)
+
+    return {"messages": [AIMessage(content=response.message)]}
+
+
 # routers
-def router_after_start(state: TripState) -> Literal["extract_trip_details", "trip_confirmation_extraction", "route_confirmation_extraction", "charging_confirmation_extraction", "extract_vehicle_state_information"]:
+def router_after_start(state: TripState) -> Literal["extract_trip_details", "trip_confirmation_extraction", "route_confirmation_extraction", "charging_confirmation_extraction", "extract_vehicle_state_information", "answer_plan_followup", "plan_confirmation_extraction"]:
+
+    if state['charging_plan']:
+        return "answer_plan_followup"
+
+    # Stations were found and the user has not received a plan yet: the offer is still open
+    if state['charging_station']:
+        return "plan_confirmation_extraction"
 
     if state['route_approved'] and state['charging_search_pending']:
         return "charging_confirmation_extraction"
@@ -557,6 +652,14 @@ def router_charging_approval(state: TripState) -> Literal["find_charging_station
     return "decline_charging_search"
 
 
+def router_plan_approval(state: TripState) -> Literal["plan_charging_stops", "decline_charging_plan"]:
+
+    if state["charging_plan_approved"]:
+        return "plan_charging_stops"
+
+    return "decline_charging_plan"
+
+
 graph = StateGraph(TripState)
 
 graph.add_node("extract_trip_details", extract_trip_details)
@@ -573,6 +676,10 @@ graph.add_node("is_trip_possible_with_current_vehicle_state", is_trip_possible_w
 graph.add_node("find_charging_stations", find_charging_stations)
 graph.add_node("charging_confirmation_extraction", charging_confirmation_extraction)
 graph.add_node("decline_charging_search", decline_charging_search)
+graph.add_node("plan_confirmation_extraction", plan_confirmation_extraction)
+graph.add_node("decline_charging_plan", decline_charging_plan)
+graph.add_node("plan_charging_stops", plan_charging_stops)
+graph.add_node("answer_plan_followup", answer_plan_followup)
 
 graph.add_conditional_edges(START, router_after_start)
 graph.add_edge("extract_trip_details", "validate_trip_details")
@@ -590,6 +697,10 @@ graph.add_edge("is_trip_possible_with_current_vehicle_state", END)
 graph.add_conditional_edges("charging_confirmation_extraction", router_charging_approval)
 graph.add_edge("decline_charging_search", END)
 graph.add_edge("find_charging_stations", END)
+graph.add_conditional_edges("plan_confirmation_extraction", router_plan_approval)
+graph.add_edge("decline_charging_plan", END)
+graph.add_edge("plan_charging_stops", END)
+graph.add_edge("answer_plan_followup", END)
 
 app_graph = graph.compile()
 
@@ -620,6 +731,7 @@ class ChatRequest(BaseModel):
     route_approved: bool = False
     charging_search_pending: bool = False
     charging_station: list | None = None
+    charging_plan: dict | None = None
     vehicle_state: VehicleState = Field(default_factory=VehicleState)
 
 @app.post("/chat")
@@ -648,6 +760,8 @@ async def chat_endpoint(request: ChatRequest):
             "charging_search_pending": request.charging_search_pending,
             "charging_search_approved": False,
             "charging_station": request.charging_station,
+            "charging_plan": request.charging_plan,
+            "charging_plan_approved": False,
             "vehicle_state": request.vehicle_state,
         }
 
@@ -674,6 +788,7 @@ async def chat_endpoint(request: ChatRequest):
                 "route_approved": output_state["route_approved"],
                 "charging_search_pending": output_state["charging_search_pending"],
                 "charging_station": output_state["charging_station"],
+                "charging_plan": output_state["charging_plan"],
                 "vehicle_state": output_state["vehicle_state"].model_dump(),
             }
         }
