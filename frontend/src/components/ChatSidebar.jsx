@@ -144,7 +144,7 @@ export default function ChatSidebar({
         {/* Fixed width so the text does not reflow while the panel narrows */}
         <div className={`h-full w-80 max-w-[85vw] md:max-w-none flex flex-col ${FADE} ${collapsed ? 'md:opacity-0 md:invisible' : ''}`}>
           <div className="p-5 pb-3 flex items-center justify-between">
-            <Logo to="/app" />
+            <Logo to="/app" tagline="AI EV Trip Planning Agent" />
             <div className="flex items-center gap-1">
               <button
                 onClick={onToggleCollapsed}
@@ -223,14 +223,6 @@ export default function ChatSidebar({
               >
                 <LogOut className="w-4 h-4" />
               </button>
-            </div>
-
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 tracking-wide flex items-center justify-center gap-2">
-              <span className="relative flex w-2 h-2" aria-hidden="true">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
-                <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
-              </span>
-              <span className="shimmer-text font-medium">AI EV Trip Planning Agent</span>
             </div>
           </div>
         </div>
