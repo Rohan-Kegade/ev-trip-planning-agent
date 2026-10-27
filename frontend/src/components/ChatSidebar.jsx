@@ -107,7 +107,6 @@ export default function ChatSidebar({
         </div>
 
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4" aria-label="Chats">
-          <p className="px-2 mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">Chats</p>
           {loading ? (
             <div className="space-y-2 px-2" aria-hidden="true">
               {[0, 1, 2].map((i) => <div key={i} className="h-8 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />)}

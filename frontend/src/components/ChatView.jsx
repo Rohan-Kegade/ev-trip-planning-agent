@@ -139,7 +139,7 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
   return (
     <main className="flex-1 flex flex-col h-full min-w-0">
       {/* Title */}
-      <header className="px-4 sm:px-6 py-3 border-b border-slate-200/70 dark:border-slate-800 flex items-center gap-3">
+      <header className="px-4 sm:px-6 py-2 border-b border-slate-200/70 dark:border-slate-800 flex items-center gap-3">
         <button
           onClick={onOpenSidebar}
           aria-label="Open chats"
@@ -167,7 +167,7 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-6 pb-4">
-        <div className="max-w-3xl mx-auto space-y-5 min-h-full flex flex-col">
+        <div className="max-w-4xl mx-auto space-y-5 min-h-full flex flex-col">
           {opening ? (
             <div className="space-y-4" aria-label="Loading chat">
               {[0, 1, 2].map((i) => (
@@ -205,7 +205,7 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
                 <div key={idx} className={`flex items-end gap-2.5 msg-in ${isUser ? 'justify-end' : 'justify-start'}`}>
                   {!isUser && <BotAvatar />}
                   <div
-                    className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 text-[0.9375rem] leading-relaxed whitespace-pre-wrap ${
+                    className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
                       isUser
                         ? 'bg-gradient-to-br from-indigo-700 to-indigo-600 text-white rounded-2xl rounded-br-md shadow-md shadow-indigo-300/40 dark:shadow-black/30'
                         : 'bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md shadow-sm'
@@ -235,7 +235,7 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
       {/* Answer card and input, or the ended notice */}
       <div className="px-4 sm:px-6 pb-6 pt-2">
         {ended ? (
-          <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm">
             <p className="text-sm text-slate-600 dark:text-slate-300 flex items-center gap-2">
               <Lock className="w-4 h-4 text-slate-400" /> This chat has ended. You can still read it.
             </p>
@@ -255,7 +255,7 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
             )}
             <form
               onSubmit={handleSubmit}
-              className="max-w-3xl mx-auto flex items-center gap-2 p-2 pl-5 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:focus-within:ring-indigo-500/20 transition"
+              className="max-w-4xl mx-auto flex items-center gap-2 p-2 pl-5 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:focus-within:ring-indigo-500/20 transition"
             >
               <input
                 ref={inputRef}
@@ -266,7 +266,7 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
                 onChange={(e) => setInputMessage(e.target.value)}
                 placeholder={inputRequest ? 'Or type your answer...' : 'Type your trip details or response...'}
                 aria-label="Message"
-                className="flex-1 min-w-0 bg-transparent text-[0.9375rem] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed"
+                className="flex-1 min-w-0 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed"
               />
               <button
                 type="submit"
