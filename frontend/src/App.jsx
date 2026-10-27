@@ -5,6 +5,7 @@ import ChatView from './components/ChatView';
 import SettingsModal from './components/SettingsModal';
 import { useTheme } from './theme';
 import { useAuth } from './auth';
+import { forgetConversation } from './conversationCache';
 
 const byNewest = (a, b) => (a.updated_at < b.updated_at ? 1 : -1);
 
@@ -57,6 +58,7 @@ export default function App() {
     } catch (err) {
       if (err.status !== 404) return; // keep it listed if it could not be deleted
     }
+    forgetConversation(id);
     setConversations((list) => list.filter((c) => c.id !== id));
     if (id === conversationId) startNewTrip();
   };
@@ -99,6 +101,7 @@ export default function App() {
       <ChatView
         key={viewKey}
         conversationId={conversationId}
+        summary={conversations.find((c) => c.id === conversationId) ?? null}
         onSaved={upsertConversation}
         onCreated={(id) => setDraft((d) => ({ ...d, createdId: id }))}
         onNewTrip={startNewTrip}

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { apiRequest } from './api';
+import { clearConversationCache } from './conversationCache';
 
 // Session ({ token, user }) from the backend's /auth endpoints, kept in localStorage
 const SESSION_KEY = 'evpilot_session';
@@ -33,7 +34,11 @@ export function AuthProvider({ children }) {
     setSession(next);
   }, []);
 
-  const logout = useCallback(() => saveSession(null), [saveSession]);
+  // Also drops chats cached in memory, so the next account in this tab never sees them
+  const logout = useCallback(() => {
+    clearConversationCache();
+    saveSession(null);
+  }, [saveSession]);
 
   // Check a stored token is still valid (it may have expired or the server secret changed)
   const storedToken = session?.token;

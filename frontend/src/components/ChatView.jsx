@@ -8,6 +8,7 @@ import TripInfoBar from './TripInfoBar';
 import { PRIMARY_BUTTON } from '../styles';
 import { formatDateTime } from '../format';
 import { useAuth } from '../auth';
+import { cacheConversation, getCachedConversation } from '../conversationCache';
 
 const SUGGESTIONS = [
   'Trip from Mumbai to Pune',
@@ -33,14 +34,20 @@ const BotAvatar = () => (
 
 // One chat: a saved conversation (conversationId) or a new one (null) that is saved on the first message.
 // The server owns the trip state; this only sends the new message and shows what comes back.
-export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip, onOpenSidebar, theme, onToggleTheme }) {
+export default function ChatView({ conversationId, summary, onSaved, onCreated, onNewTrip, onOpenSidebar, theme, onToggleTheme }) {
   const { authRequest } = useAuth();
   const navigate = useNavigate();
-  const [conversation, setConversation] = useState(null);
-  const [graphState, setGraphState] = useState(EMPTY_STATE);
+  // A chat opened earlier in this tab shows at once and refreshes in the background
+  const [cached] = useState(() => (conversationId ? getCachedConversation(conversationId) : null));
+  // The title and date come from the sidebar list straight away, before the chat itself has loaded
+  const [conversation, setConversation] = useState(cached?.conversation ?? summary ?? null);
+  const [graphState, setGraphState] = useState(cached?.state ?? EMPTY_STATE);
   // How the backend wants the next answer collected: a list of options or battery/range inputs
-  const [inputRequest, setInputRequest] = useState(null);
-  const [opening, setOpening] = useState(Boolean(conversationId));
+  const [inputRequest, setInputRequest] = useState(cached?.input_request ?? null);
+  const [opening, setOpening] = useState(Boolean(conversationId && !cached));
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  // Messages that were already there when the chat opened appear as they are; only new ones animate in
+  const [historyCount, setHistoryCount] = useState(cached?.state.messages.length ?? 0);
   const [openError, setOpenError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
@@ -48,17 +55,23 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
   const inputRef = useRef(null);
   // Only a chat opened from the list is fetched; one created here already has its data
   const shouldFetch = useRef(Boolean(conversationId));
+  // Set once the user sends a message, so a slower background refresh cannot overwrite the reply
+  const hasSent = useRef(false);
+
+  const remember = (data) => cacheConversation(data.conversation.id, data);
 
   useEffect(() => {
     if (!shouldFetch.current) return;
     let cancelled = false;
     authRequest(`/conversations/${conversationId}`)
       .then((data) => {
-        if (cancelled) return;
+        if (cancelled || hasSent.current) return;
         shouldFetch.current = false;
+        cacheConversation(conversationId, data);
         setConversation(data.conversation);
         setGraphState(data.state);
         setInputRequest(data.input_request ?? null);
+        setHistoryCount(data.state.messages.length);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -73,8 +86,19 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
     };
   }, [conversationId, authRequest, navigate]);
 
+  // A quick load shows no skeleton at all; it only appears if opening takes a noticeable moment
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!opening) return;
+    const timer = setTimeout(() => setShowSkeleton(true), 200);
+    return () => clearTimeout(timer);
+  }, [opening]);
+
+  // Opening a chat jumps straight to the latest message; only messages arriving after that scroll smoothly
+  const hasScrolled = useRef(false);
+  useEffect(() => {
+    if (graphState.messages.length === 0) return;
+    chatEndRef.current?.scrollIntoView({ behavior: hasScrolled.current ? 'smooth' : 'auto' });
+    hasScrolled.current = true;
   }, [graphState.messages, isLoading]);
 
   const ended = Boolean(conversation?.ended);
@@ -82,6 +106,7 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
   const sendMessage = async (text) => {
     if (!text.trim() || isLoading || ended) return;
 
+    hasSent.current = true;
     setInputMessage('');
     setInputRequest(null);
     inputRef.current?.focus();
@@ -92,6 +117,7 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
 
     try {
       const data = await authRequest('/chat', { body: { conversation_id: conversation?.id ?? null, message: text } });
+      remember(data);
       setGraphState(data.state);
       setInputRequest(data.input_request ?? null);
       setConversation(data.conversation);
@@ -112,9 +138,10 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
   const endChat = async () => {
     setInputRequest(null);
     try {
-      const summary = await authRequest(`/conversations/${conversation.id}/end`, { method: 'POST' });
-      setConversation(summary);
-      onSaved(summary);
+      const endedSummary = await authRequest(`/conversations/${conversation.id}/end`, { method: 'POST' });
+      remember({ conversation: endedSummary, state: graphState, input_request: null });
+      setConversation(endedSummary);
+      onSaved(endedSummary);
     } catch (err) {
       setGraphState((prev) => ({ ...prev, messages: [...prev.messages, { role: 'assistant', content: `⚠️ ${err.message}` }] }));
     }
@@ -171,11 +198,13 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-6 pb-4">
         <div className="max-w-4xl mx-auto space-y-5 min-h-full flex flex-col">
           {opening ? (
-            <div className="space-y-4" aria-label="Loading chat">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className={`h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse ${i % 2 ? 'ml-auto w-1/2' : 'w-2/3'}`} />
-              ))}
-            </div>
+            showSkeleton && (
+              <div className="space-y-4" aria-label="Loading chat">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className={`h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse ${i % 2 ? 'ml-auto w-1/2' : 'w-2/3'}`} />
+                ))}
+              </div>
+            )
           ) : openError ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center gap-3">
               <p className="text-slate-600 dark:text-slate-300">Couldn’t open this chat: {openError}</p>
@@ -204,7 +233,7 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
             messages.map((msg, idx) => {
               const isUser = msg.role === 'user';
               return (
-                <div key={idx} className={`flex items-end gap-2.5 msg-in ${isUser ? 'justify-end' : 'justify-start'}`}>
+                <div key={idx} className={`flex items-end gap-2.5 ${idx >= historyCount ? 'msg-in' : ''} ${isUser ? 'justify-end' : 'justify-start'}`}>
                   {!isUser && <BotAvatar />}
                   <div
                     className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 text-sm leading-relaxed ${
