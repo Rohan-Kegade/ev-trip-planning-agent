@@ -3,6 +3,7 @@ import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug,
 import { useNavigate } from 'react-router-dom';
 import { Logo, ThemeToggle } from './components/Brand';
 import SettingsModal, { Avatar } from './components/SettingsModal';
+import InputRequest from './components/InputRequest';
 import { useTheme } from './theme';
 import { useAuth } from './auth';
 
@@ -40,6 +41,8 @@ export default function App() {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // How the backend wants the next answer collected: a list of options or battery/range inputs
+  const [inputRequest, setInputRequest] = useState(null);
 
   // Entire LangGraph state maintained locally
   const [graphState, setGraphState] = useState({
@@ -69,6 +72,7 @@ export default function App() {
 
     const userText = text;
     setInputMessage('');
+    setInputRequest(null);
     inputRef.current?.focus();
     setIsLoading(true);
 
@@ -99,6 +103,7 @@ export default function App() {
 
       // Update local state with updated graph state from backend
       setGraphState(data.state);
+      setInputRequest(data.input_request ?? null);
     } catch (error) {
       console.error('Error sending message:', error);
       setGraphState((prev) => ({
@@ -123,7 +128,13 @@ export default function App() {
     navigate('/');
   };
 
+  const typeInstead = () => {
+    setInputRequest(null);
+    inputRef.current?.focus();
+  };
+
   const resetSession = () => {
+    setInputRequest(null);
     setGraphState({
       trip: { origin: null, destination: null, is_round_trip: null },
       route: null,
@@ -395,16 +406,26 @@ export default function App() {
 
         {/* Message Input Bar */}
         <div className="px-6 pb-6 pt-2">
+          {!isLoading && inputRequest && (
+            <InputRequest
+              key={graphState.messages.length}
+              request={inputRequest}
+              onSubmit={sendMessage}
+              onTypeInstead={typeInstead}
+              onDismiss={() => setInputRequest(null)}
+            />
+          )}
           <form
             onSubmit={handleSendMessage}
             className="max-w-3xl mx-auto flex items-center gap-2 p-2 pl-5 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:focus-within:ring-indigo-500/20 transition"
           >
             <input
               ref={inputRef}
+              data-chat-input
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="Type your trip details or response..."
+              placeholder={inputRequest ? 'Or type your answer...' : 'Type your trip details or response...'}
               className="flex-1 bg-transparent text-[15px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none"
             />
             <button

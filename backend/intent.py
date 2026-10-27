@@ -12,13 +12,16 @@ YES_WORDS = {
     "correct", "right", "perfect", "great", "fine", "absolutely", "definitely",
     "confirm", "confirmed", "proceed", "continue", "go", "ahead", "good",
 }
-NO_WORDS = {"no", "nope", "nah", "n", "not", "dont", "don't", "cancel", "stop", "wrong", "incorrect", "never", "later"}
+NO_WORDS = {
+    "no", "nope", "nah", "n", "not", "dont", "don't", "cancel", "stop", "wrong", "incorrect", "never", "later", "change",
+}
 
 # Words that carry no decision on their own ("yes, please go ahead with the plan")
 FILLER_WORDS = {
     "please", "pls", "plz", "thanks", "thank", "you", "do", "it", "that", "that's", "thats", "is", "its", "it's",
     "this", "all", "looks", "sounds", "the", "a", "me", "give", "show", "search", "find", "stations",
     "plan", "charging", "now", "and", "for", "with", "let's", "lets", "of", "course", "need", "want",
+    "something", "trip",
 }
 
 
@@ -41,20 +44,68 @@ def quick_yes_no(text: str) -> bool | None:
     return has_yes
 
 
+ONE_WAY_PHRASES = {"one way", "oneway", "one way trip", "just one way", "single", "one way only"}
+ROUND_TRIP_PHRASES = {"round trip", "roundtrip", "return", "return trip", "round", "both ways", "there and back"}
+
+
+def quick_trip_type(text: str) -> bool | None:
+    """True for "round trip", False for "one way", None for anything longer or different."""
+    phrase = " ".join(re.findall(r"[a-z]+", text.lower()))
+    if phrase in ROUND_TRIP_PHRASES:
+        return True
+    if phrase in ONE_WAY_PHRASES:
+        return False
+    return None
+
+
 PERCENT = re.compile(r"(\d{1,3})\s*(?:%|percent\b)")
 KILOMETRES = re.compile(r"(\d{1,4})\s*(?:km|kms|kilomet(?:er|re)s?)\b")
 
 
-def quick_vehicle_state(text: str) -> tuple[int, int] | None:
-    """(battery %, range km) when the message states exactly one of each, else None."""
+def quick_vehicle_state(text: str) -> tuple[int | None, int | None] | None:
+    """(battery %, range km) from a message like "20% and 50 km"; either may be None if not mentioned.
+
+    None when nothing is stated, or when a value is ambiguous (two percentages, a battery over 100%).
+    """
     text = text.lower()
     percents = PERCENT.findall(text)
     kms = KILOMETRES.findall(text)
 
-    if len(percents) != 1 or len(kms) != 1:
+    if len(percents) > 1 or len(kms) > 1 or not (percents or kms):
         return None
 
-    battery, range_km = int(percents[0]), int(kms[0])
-    if battery > 100:
+    battery = int(percents[0]) if percents else None
+    range_km = int(kms[0]) if kms else None
+    if battery is not None and battery > 100:
         return None
     return battery, range_km
+
+
+# Answer options the UI offers at each step, as (label, description). The label is sent as the
+# user's message, so each is worded for the parsers above to handle without the LLM.
+TRIP_TYPE_OPTIONS = [
+    ("One way", "Just getting there"),
+    ("Round trip", "There and back on the same route"),
+]
+TRIP_CONFIRM_OPTIONS = [
+    ("Yes, that's correct", "Work out the route, distance and travel time"),
+    ("No, change something", "Edit the origin, destination or trip type"),
+]
+ROUTE_CONFIRM_OPTIONS = [
+    ("Yes, go ahead", "Check your battery and charging needs"),
+    ("No, change the trip", "Pick a different origin or destination"),
+]
+SEARCH_OFFER_OPTIONS = [
+    ("Yes, search for stations", "Find chargers along your route"),
+    ("No thanks", "Skip the search for now"),
+]
+PLAN_OFFER_OPTIONS = [
+    ("Yes, give me the plan", "Where to stop, how long to charge and total time"),
+    ("No thanks", "You can ask for it later"),
+]
+# Questions about the finished plan; these go to the LLM, which answers from the plan
+PLAN_FOLLOWUP_OPTIONS = [
+    ("How long will I spend charging in total?", ""),
+    ("Where is my first stop?", ""),
+    ("Explain the plan step by step", ""),
+]

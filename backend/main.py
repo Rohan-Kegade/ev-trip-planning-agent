@@ -10,7 +10,11 @@ import requests
 import polyline
 from concurrent.futures import ThreadPoolExecutor
 from planner import build_charging_plan, format_duration, format_plan_message, sample_route
-from intent import quick_vehicle_state, quick_yes_no
+from intent import (
+    PLAN_FOLLOWUP_OPTIONS, PLAN_OFFER_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS, TRIP_CONFIRM_OPTIONS,
+    TRIP_TYPE_OPTIONS,
+    quick_trip_type, quick_vehicle_state, quick_yes_no,
+)
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from auth import router as auth_router, get_current_user, User
@@ -46,11 +50,22 @@ class LLMMessage(BaseModel):
     message: str
 
 
+OPTIONS_DESCRIPTION = (
+    "Up to 4 short answers (under 40 characters each) the user could tap to reply to your message, "
+    "for example suggested destinations or which detail to change. Empty if the question is open-ended."
+)
+
+
+class ReplyWithOptions(LLMMessage):
+    options: list[str] = Field(default_factory=list, description=OPTIONS_DESCRIPTION)
+
+
 class TripTurn(TripDetails):
     message: str = Field(
         default="",
         description="Your next message to the user. Empty if origin, destination and trip type are all known.",
     )
+    options: list[str] = Field(default_factory=list, description=OPTIONS_DESCRIPTION)
 
 
 class RouteApproval(BaseModel):
@@ -98,6 +113,7 @@ class TripState(TypedDict):
     charging_plan_approved: bool
     vehicle_state: VehicleState
     draft_reply: str | None
+    reply_options: list[str] | None
 
 
 # llm
@@ -108,6 +124,7 @@ structured_llm_trip_approval = llm.with_structured_output(TripApproval)
 structured_llm_charging_approval = llm.with_structured_output(ChargingApproval)
 structured_llm_plan_approval = llm.with_structured_output(PlanApproval)
 structured_llm_message = llm.with_structured_output(LLMMessage)
+structured_llm_reply_with_options = llm.with_structured_output(ReplyWithOptions)
 
 
 # helper functions
@@ -116,6 +133,17 @@ def format_conversation(messages):
     return "\n".join(
         f"{'User' if isinstance(msg, HumanMessage) else 'Assistant'}: {msg.content}" for msg in messages
     )
+
+
+def clean_options(options):
+    # The LLM occasionally repeats an option or writes a sentence; keep a few short, distinct ones
+    seen, cleaned = set(), []
+    for option in options or []:
+        option = option.strip()
+        if option and len(option) <= 60 and option.lower() not in seen:
+            seen.add(option.lower())
+            cleaned.append(option)
+    return cleaned[:4] or None
 
 
 def latest_user_message(state):
@@ -257,6 +285,13 @@ def get_charging_stations_along_route(geometry: str, search_radius_km: int = 5):
 def extract_trip_details(state: TripState):
     print("extract_trip_details")
 
+    # Answering "one way or round trip?" (typed or via the answer chips) needs no LLM
+    trip = state["trip"]
+    if trip.origin and trip.destination and trip.is_round_trip is None:
+        is_round_trip = quick_trip_type(latest_user_message(state))
+        if is_round_trip is not None:
+            return {"trip": trip.model_copy(update={"is_round_trip": is_round_trip}), "draft_reply": None, "reply_options": None}
+
     # One call both extracts the trip and drafts the follow-up question, instead of two in a row
     prompt = f"""
         You are an intelligent EV trip-planning assistant.
@@ -271,7 +306,8 @@ def extract_trip_details(state: TripState):
            - If the user's response is ambiguous or unclear, ask a follow-up question to clarify. Do not make assumptions.
            - Do not mention internal fields or technical details.
            - Do not answer anything unrelated to EV trip planning.
-           If all three are known, leave the message empty.
+           If your message asks something with a few natural answers, also list them as options.
+           If all three are known, leave the message and options empty.
 
         Trip so far: {describe_trip(state["trip"])}
 
@@ -281,7 +317,8 @@ def extract_trip_details(state: TripState):
     turn = structured_llm_trip_turn.invoke(prompt)
 
     trip = TripDetails(origin=turn.origin, destination=turn.destination, is_round_trip=turn.is_round_trip)
-    return {"trip": trip, "draft_reply": turn.message.strip() or None}
+    draft = turn.message.strip() or None
+    return {"trip": trip, "draft_reply": draft, "reply_options": clean_options(turn.options) if draft else None}
 
 
 def validate_trip_details(state: TripState):
@@ -331,11 +368,13 @@ def gather_trip_details(state: TripState):
         Do not mention internal fields or technical details.
         Do not answer anything unrelated to EV trip planning.
 
+        If your message asks something with a few natural answers, also list them as options.
+
     """
 
-    response = structured_llm_message.invoke(prompt)
+    response = structured_llm_reply_with_options.invoke(prompt)
 
-    return {"messages": [AIMessage(content=response.message)]}
+    return {"messages": [AIMessage(content=response.message)], "reply_options": clean_options(response.options)}
 
 
 def ask_for_trip_confirmation(state: TripState):
@@ -462,8 +501,13 @@ def extract_vehicle_state_information(state: TripState):
 
     parsed = quick_vehicle_state(latest_user_message(state))
     if parsed:
+        # Keep a value given earlier when this message only has the other one ("Range 50 km")
         battery, range_km = parsed
-        return {"vehicle_state": VehicleState(battery_soc=battery, range_left=range_km)}
+        known = state["vehicle_state"]
+        return {"vehicle_state": VehicleState(
+            battery_soc=battery if battery is not None else known.battery_soc,
+            range_left=range_km if range_km is not None else known.range_left,
+        )}
 
     prompt = f"""
         Extract the battery and range information from the conversation.
@@ -624,6 +668,39 @@ def answer_plan_followup(state: TripState):
     response = structured_llm_message.invoke(prompt)
 
     return {"messages": [AIMessage(content=response.message)]}
+
+
+def choice(options):
+    return {"type": "choice", "options": [{"label": label, "description": description} for label, description in options]}
+
+
+def input_request_for(state) -> dict | None:
+    """How the UI should collect the answer to the assistant's last question, or None for plain typing.
+
+    "choice": a list of options to pick from (the label is sent as the message), with typing as a fallback.
+    "vehicle": battery and range inputs, for the fields that are still missing.
+    """
+    trip = state["trip"]
+    vehicle = state["vehicle_state"]
+
+    if state["charging_plan"]:
+        return choice(PLAN_FOLLOWUP_OPTIONS)
+    if state["charging_station"]:
+        return choice(PLAN_OFFER_OPTIONS)
+    if state["charging_search_pending"]:
+        return choice(SEARCH_OFFER_OPTIONS)
+    if state["route_approved"]:
+        missing = [name for name, value in (("battery", vehicle.battery_soc), ("range", vehicle.range_left)) if value is None]
+        return {"type": "vehicle", "fields": missing} if missing else None
+    if state["route_details_found"]:
+        return choice(ROUTE_CONFIRM_OPTIONS)
+    if state["trip_details_retrieved"] and not state["trip_details_confirmed"]:
+        return choice(TRIP_CONFIRM_OPTIONS)
+    if trip.origin and trip.destination and trip.is_round_trip is None:
+        return choice(TRIP_TYPE_OPTIONS)
+    if state.get("reply_options"):
+        return choice((option, "") for option in state["reply_options"])
+    return None
 
 
 # routers
@@ -808,6 +885,7 @@ def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_user)):
             "charging_plan_approved": False,
             "vehicle_state": request.vehicle_state,
             "draft_reply": None,
+            "reply_options": None,
         }
 
         # 3. Invoke graph
@@ -823,6 +901,7 @@ def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_user)):
 
         return {
             "response": latest_ai_message,
+            "input_request": input_request_for(output_state),
             "state": {
                 "trip": output_state["trip"].model_dump(),
                 "route": output_state["route"],

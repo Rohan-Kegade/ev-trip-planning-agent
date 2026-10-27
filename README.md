@@ -18,7 +18,7 @@ trip details → confirm trip → route (distance/time) → confirm route
 
 - **LLM (Gemini)** extracts structured data from what the user says (origin, destination, battery %, yes/no confirmations) and writes friendly replies.
 - **Plain Python** does the real work: routing, station lookup, and the charging plan math in `backend/planner.py` (pure functions, no LLM, unit tested), so the plan is deterministic and never invented.
-- **Fast paths keep it quick:** clear replies ("yes", "no thanks", "20% and 50 km") are parsed by rules in `backend/intent.py` and replies fully determined by the state use templates, so most turns make no LLM call. Anything ambiguous still goes to the LLM.
+- **Fast paths keep it quick:** clear replies ("yes", "no thanks", "20% and 50 km") are parsed by rules in `backend/intent.py` and replies fully determined by the state use templates, so most turns make no LLM call. Anything ambiguous still goes to the LLM. Each `/chat` response can also carry an `input_request` telling the UI how to collect the next answer: a numbered list of options (fixed ones like yes/no, or suggestions the LLM writes, e.g. destinations) or a battery slider and range field. Typing always remains available.
 
 The backend is stateless. The frontend sends the full conversation state with every request and gets the updated state back.
 
@@ -46,6 +46,7 @@ frontend/
   src/App.jsx      # chat UI
   src/pages/       # Landing, Login, Signup
   src/components/SettingsModal.jsx  # profile, password, delete account
+  src/components/InputRequest.jsx   # option list and battery/range card shown above the chat input
   src/auth.jsx     # auth context: calls /auth endpoints, stores the token
 ```
 
