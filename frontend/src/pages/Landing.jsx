@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Battery, MapPin, Plug, Route, Clock, MessageSquare, Calculator } from 'lucide-react';
+import { ArrowRight, Battery, MapPin, Plug, Route, MessageSquare, Calculator } from 'lucide-react';
 import { Logo, ThemeToggle } from '../components/Brand';
+import PlanCard from '../components/PlanCard';
 import { PAGE_BG, PRIMARY_BUTTON } from '../styles';
 import { useTheme } from '../theme';
 import { useAuth } from '../auth';
@@ -29,6 +30,27 @@ const STEPS = [
   { icon: Calculator, title: 'Get a charging plan', text: 'Stops, charge times and total travel time, computed in code rather than guessed by the AI.' },
 ];
 
+// Sample plan for the preview, in the same shape the backend sends, so it is drawn by the real PlanCard
+const EXAMPLE_PLAN_CARD = {
+  type: 'plan',
+  origin: 'Pune',
+  destination: 'Mumbai',
+  start_soc: 40,
+  plan: {
+    feasible: true,
+    round_trip: false,
+    total_km: 148,
+    drive_minutes: 150,
+    charge_minutes: 30,
+    total_minutes: 180,
+    arrival_soc: 28,
+    gap: null,
+    stops: [
+      { id: 'example', name: 'Highway fast charger', town: 'Lonavala', km: 64, detour_km: 0.8, leg: 'outbound', arrival_soc: 22, charge_to: 80, charge_minutes: 30 },
+    ],
+  },
+};
+
 // Static preview of the chat, so visitors see what they're signing up for
 const ChatPreview = () => (
   <div className="w-full max-w-md rounded-3xl bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-300/70 dark:border-slate-800 shadow-2xl shadow-indigo-200/50 dark:shadow-black/40 p-5 space-y-3">
@@ -38,22 +60,8 @@ const ChatPreview = () => (
       </p>
     </div>
     <div className="flex justify-start">
-      <p className="max-w-[85%] px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-300/80 dark:border-slate-700 rounded-2xl rounded-bl-md">
-        That’s 148 km. You’ll need one stop: charge at Lonavala from 22% to 70%, about 35 min.
-      </p>
-    </div>
-    <div className="rounded-2xl bg-gradient-to-br from-indigo-600 to-cyan-700 text-white p-4 grid grid-cols-3 gap-3">
-      <div>
-        <p className="text-xl font-bold leading-none">148<span className="text-xs font-medium ml-0.5">km</span></p>
-        <p className="text-[11px] mt-1 text-white/90">Distance</p>
-      </div>
-      <div>
-        <p className="text-xl font-bold leading-none">1</p>
-        <p className="text-[11px] mt-1 text-white/90">Stop</p>
-      </div>
-      <div>
-        <p className="text-xl font-bold leading-none">3h 40m</p>
-        <p className="text-[11px] mt-1 text-white/90 flex items-center gap-1"><Clock className="w-3 h-3" /> Total</p>
+      <div className="w-full max-w-[92%] px-3.5 py-3 text-sm bg-white dark:bg-slate-800 border border-slate-300/80 dark:border-slate-700 rounded-2xl rounded-bl-md">
+        <PlanCard card={EXAMPLE_PLAN_CARD} />
       </div>
     </div>
     <p className="text-[11px] text-center text-slate-500 dark:text-slate-400">Example conversation</p>
@@ -66,21 +74,24 @@ export default function Landing() {
 
   return (
     <div className={PAGE_BG}>
-      <header className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
-        <Logo />
-        <nav className="flex items-center gap-1 sm:gap-2">
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          {user ? (
-            <Link to="/app" className={PRIMARY_BUTTON}>Open planner</Link>
-          ) : (
-            <>
-              <Link to="/login" className="px-3 sm:px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 transition">
-                Log in
-              </Link>
-              <Link to="/signup" className={PRIMARY_BUTTON}>Sign up</Link>
-            </>
-          )}
-        </nav>
+      {/* Full-width line under the nav bar; the content inside stays centred */}
+      <header className="border-b border-slate-300/70 dark:border-slate-800">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
+          <Logo />
+          <nav className="flex items-center gap-1 sm:gap-2">
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            {user ? (
+              <Link to="/app" className={PRIMARY_BUTTON}>Open planner</Link>
+            ) : (
+              <>
+                <Link to="/login" className="px-3 sm:px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 transition">
+                  Log in
+                </Link>
+                <Link to="/signup" className={PRIMARY_BUTTON}>Sign up</Link>
+              </>
+            )}
+          </nav>
+        </div>
       </header>
 
       <main>
