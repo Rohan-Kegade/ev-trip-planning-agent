@@ -18,7 +18,7 @@ export const ThemeToggle = ({ theme, onToggle }) => (
     onClick={onToggle}
     title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
     aria-label="Toggle theme"
-    className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
+    className="p-2 pointer-coarse:p-3 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
   >
     {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
   </button>

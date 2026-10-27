@@ -222,7 +222,7 @@ export default function SettingsModal({ onClose }) {
           <button
             onClick={onClose}
             aria-label="Close settings"
-            className="p-2 -mr-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            className="p-2 pointer-coarse:p-3 -mr-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
           >
             <X className="w-4 h-4" />
           </button>

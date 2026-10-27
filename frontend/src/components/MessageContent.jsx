@@ -9,7 +9,7 @@ const MAPS_BUTTON_VARIANTS = {
   // In a chat bubble
   primary: 'gap-2 px-4 py-2.5 rounded-xl text-sm shadow-md shadow-indigo-300/40 dark:shadow-black/30',
   // In the chat header; just the icon on small screens
-  compact: 'shrink-0 gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-full text-xs shadow-sm',
+  compact: 'shrink-0 gap-1.5 p-2 pointer-coarse:p-3 sm:px-3 sm:py-1.5 rounded-full text-xs shadow-sm',
 };
 
 export const MapsButton = ({ href, variant = 'primary' }) => {

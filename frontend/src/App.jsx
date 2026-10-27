@@ -81,7 +81,8 @@ export default function App() {
   const viewKey = !conversationId || conversationId === draft.createdId ? `new-${draft.key}` : conversationId;
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-cyan-50/40 text-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-200 font-sans antialiased">
+    // h-dvh: the height actually visible on phones, between the browser's address and tool bars
+    <div className="flex h-dvh bg-gradient-to-br from-slate-50 via-indigo-50/40 to-cyan-50/40 text-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-200 font-sans antialiased">
       <ChatSidebar
         conversations={conversations}
         loading={listLoading}

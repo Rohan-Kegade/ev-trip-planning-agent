@@ -23,7 +23,7 @@ const Stat = ({ id, icon: Icon, label, value, detail, children, tone = 'default'
       {children}
     </>
   );
-  const base = `min-w-0 flex items-center gap-2 px-3 py-2 rounded-xl border text-left ${toneClass}`;
+  const base = `min-w-0 flex items-center gap-2 px-3 py-2 pointer-coarse:py-3 rounded-xl border text-left ${toneClass}`;
   const title = [label, value, detail].filter(Boolean).join(': ');
 
   if (!expandable) {
@@ -147,6 +147,7 @@ const ChargingDetails = ({ stations, plan }) => (
 // What the trip looks like so far, shown under the chat title; each card can open its details
 export default function TripInfoBar({ state }) {
   const [openCard, setOpenCard] = useState(null);
+  const [cardsOpen, setCardsOpen] = useState(false); // phones only; the cards are always shown from sm up
   const barRef = useRef(null);
   const { trip, route, vehicle_state: vehicle, charging_station: stations, charging_plan: plan } = state;
 
@@ -183,6 +184,19 @@ export default function TripInfoBar({ state }) {
   const toggle = (id) => setOpenCard((current) => (current === id ? null : id));
   const cardProps = (id) => ({ id, expandable: available[id], expanded: shown === id, onToggle: toggle, align: ALIGN[id] });
 
+  // On phones the cards start collapsed behind a one-line summary, leaving room for the chat
+  const tripLabel = trip.origin && trip.destination ? `${trip.origin} → ${trip.destination}` : trip.origin || trip.destination;
+  const summary = [
+    tripLabel,
+    route && `${route.distance} km`,
+    hasSoc && `${soc}%`,
+    plan?.feasible && (plan.stops.length === 0 ? 'No stops' : `${plan.stops.length} stop${plan.stops.length !== 1 ? 's' : ''}`),
+  ].filter(Boolean).join(' · ');
+  const toggleCards = () => {
+    setOpenCard(null);
+    setCardsOpen((open) => !open);
+  };
+
   // The details float over the chat, so a click outside them or Escape closes them
   useEffect(() => {
     if (!shown) return;
@@ -203,8 +217,22 @@ export default function TripInfoBar({ state }) {
   return (
     <div ref={barRef} className="relative z-20 border-b border-slate-200/70 dark:border-slate-800 px-4 sm:px-6 py-2">
       <div className="relative max-w-5xl mx-auto">
+        <button
+          onClick={toggleCards}
+          aria-expanded={cardsOpen}
+          aria-controls="trip-cards"
+          className="sm:hidden w-full flex items-center gap-2 px-3 py-2 pointer-coarse:py-3 rounded-xl border bg-white dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-left"
+        >
+          <MapPin className="w-3.5 h-3.5 shrink-0 text-indigo-500" aria-hidden="true" />
+          <span className={`min-w-0 flex-1 truncate text-xs font-semibold ${summary ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
+            {summary || 'Trip details'}
+          </span>
+          <span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-400">{cardsOpen ? 'Less' : 'More'}</span>
+          <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-slate-400 transition-transform ${cardsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </button>
+
         <div className="flex flex-col lg:flex-row lg:items-center gap-2">
-          <div className="flex-1 min-w-0 grid grid-cols-2 lg:grid-cols-4 gap-2">
+          <div id="trip-cards" className={`flex-1 min-w-0 grid-cols-2 lg:grid-cols-4 gap-2 sm:grid ${cardsOpen ? 'grid mt-2 sm:mt-0' : 'hidden'}`}>
             <Stat
               {...cardProps('trip')}
               icon={MapPin}

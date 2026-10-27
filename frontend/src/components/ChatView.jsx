@@ -103,13 +103,15 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
 
   const ended = Boolean(conversation?.ended);
 
-  const sendMessage = async (text) => {
+  // typed: sent from the input. Only then is the input refocused, to keep typing; an option,
+  // card or suggestion tapped on a phone would otherwise pop up the keyboard for no reason.
+  const sendMessage = async (text, { typed = false } = {}) => {
     if (!text.trim() || isLoading || ended) return;
 
     hasSent.current = true;
     setInputMessage('');
     setInputRequest(null);
-    inputRef.current?.focus();
+    if (typed) inputRef.current?.focus();
     setIsLoading(true);
 
     const withUserMessage = [...graphState.messages, { role: 'user', content: text }];
@@ -154,7 +156,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    sendMessage(inputMessage);
+    sendMessage(inputMessage, { typed: true });
   };
 
   const typeInstead = () => {
@@ -171,7 +173,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
         <button
           onClick={onOpenSidebar}
           aria-label="Open chats"
-          className="p-2 -ml-2 md:hidden text-slate-500 dark:text-slate-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          className="p-2 pointer-coarse:p-3 -ml-2 md:hidden text-slate-500 dark:text-slate-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -287,7 +289,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
             )}
             <form
               onSubmit={handleSubmit}
-              className="max-w-4xl mx-auto flex items-center gap-2 p-2 pl-5 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:focus-within:ring-indigo-500/20 transition"
+              className="max-w-4xl mx-auto flex items-stretch gap-2 p-2 pl-5 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:focus-within:ring-indigo-500/20 transition"
             >
               <input
                 ref={inputRef}
@@ -298,7 +300,9 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
                 onChange={(e) => setInputMessage(e.target.value)}
                 placeholder={inputRequest ? 'Or type your answer...' : 'Type your trip details...'}
                 aria-label="Message"
-                className="flex-1 min-w-0 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed"
+                // Fills the pill's height so tapping anywhere on it focuses the field; 16px on touch screens,
+                // since iOS zooms the page when a smaller field is tapped
+                className="flex-1 min-w-0 bg-transparent text-sm pointer-coarse:text-[16px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed"
               />
               <button
                 type="submit"
