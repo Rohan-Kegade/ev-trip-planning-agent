@@ -9,7 +9,7 @@ const MIN_PASSWORD_LENGTH = 8;
 const TABS = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'password', label: 'Password', icon: KeyRound },
-  { id: 'delete', label: 'Delete account', icon: UserX, danger: true },
+  { id: 'delete', label: 'Delete account', shortLabel: 'Delete', icon: UserX, danger: true },
 ];
 
 export const Avatar = ({ name, size = 'w-9 h-9 text-sm' }) => (
@@ -229,8 +229,9 @@ export default function SettingsModal({ onClose }) {
         </div>
 
         <div className="flex flex-col sm:flex-row min-h-0 flex-1">
-          <nav className="sm:w-52 shrink-0 p-3 flex sm:flex-col gap-1 overflow-x-auto border-b sm:border-b-0 sm:border-r border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900">
-            {TABS.map(({ id, label, icon: Icon, danger }) => {
+          {/* Tabs share the width on phones (icon above label) and stack in a column from sm up */}
+          <nav className="sm:w-52 shrink-0 p-2 sm:p-3 flex sm:flex-col gap-1 border-b sm:border-b-0 sm:border-r border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900">
+            {TABS.map(({ id, label, shortLabel, icon: Icon, danger }) => {
               const active = tab === id;
               const color = danger
                 ? 'text-rose-600 dark:text-rose-400'
@@ -242,11 +243,14 @@ export default function SettingsModal({ onClose }) {
                   key={id}
                   onClick={() => setTab(id)}
                   aria-current={active ? 'page' : undefined}
-                  className={`shrink-0 flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition ${color} ${
+                  className={`flex-1 sm:flex-none min-w-0 flex flex-col sm:flex-row items-center gap-1 sm:gap-2.5 px-2 sm:px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition ${color} ${
                     active ? 'bg-white dark:bg-slate-800 shadow-sm' : 'hover:bg-white/70 dark:hover:bg-slate-800/60'
                   }`}
                 >
-                  <Icon className="w-4 h-4" /> {label}
+                  <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  {/* Phones get the short label so all three tabs fit in one row */}
+                  <span className="truncate max-w-full sm:hidden" aria-hidden="true">{shortLabel ?? label}</span>
+                  <span className="truncate max-w-full max-sm:sr-only">{label}</span>
                 </button>
               );
             })}

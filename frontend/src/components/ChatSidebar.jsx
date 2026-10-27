@@ -133,7 +133,7 @@ export default function ChatSidebar({
           bg-white dark:bg-slate-900 md:bg-white/80 md:dark:bg-slate-900/80 md:backdrop-blur md:rounded-3xl
           border-r md:border border-slate-200/70 dark:border-slate-800 md:shadow-xl md:shadow-indigo-100/40 md:dark:shadow-black/30
           transition-[transform,width] duration-300 ease-in-out motion-reduce:transition-none
-          ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${collapsed ? 'md:w-16' : 'md:w-80'}`}
+          ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${collapsed ? 'md:w-16' : 'md:w-72 lg:w-80'}`}
       >
         <div
           className={`absolute inset-y-0 left-0 hidden md:block ${FADE} ${collapsed ? 'opacity-100 visible delay-100' : 'opacity-0 invisible'}`}
@@ -142,7 +142,7 @@ export default function ChatSidebar({
         </div>
 
         {/* Fixed width so the text does not reflow while the panel narrows */}
-        <div className={`h-full w-80 max-w-[85vw] md:max-w-none flex flex-col ${FADE} ${collapsed ? 'md:opacity-0 md:invisible' : ''}`}>
+        <div className={`h-full w-80 md:w-72 lg:w-80 max-w-[85vw] md:max-w-none flex flex-col ${FADE} ${collapsed ? 'md:opacity-0 md:invisible' : ''}`}>
           <div className="p-5 pb-3 flex items-center justify-between">
             <Logo to="/app" tagline="AI EV Trip Planning Agent" />
             <div className="flex items-center gap-1">

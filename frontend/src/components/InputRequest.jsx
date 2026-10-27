@@ -155,7 +155,7 @@ function VehicleCard({ fields, onSubmit, onTypeInstead, onDismiss }) {
               <Gauge className="w-4 h-4 text-indigo-500" /> Range left (as shown in your car)
             </label>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative w-32">
+              <div className="relative w-36">
                 <input
                   id="range-input"
                   type="number"

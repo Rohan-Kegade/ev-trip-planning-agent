@@ -296,7 +296,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
                 value={inputMessage}
                 disabled={opening || Boolean(openError)}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder={inputRequest ? 'Or type your answer...' : 'Type your trip details or response...'}
+                placeholder={inputRequest ? 'Or type your answer...' : 'Type your trip details...'}
                 aria-label="Message"
                 className="flex-1 min-w-0 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed"
               />
