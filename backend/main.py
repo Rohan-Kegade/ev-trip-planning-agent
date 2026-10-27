@@ -10,8 +10,9 @@ import requests
 import polyline
 from concurrent.futures import ThreadPoolExecutor
 from planner import build_charging_plan, format_duration, format_plan_message, sample_route
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from auth import router as auth_router, get_current_user, User
 
 load_dotenv()
 
@@ -710,11 +711,13 @@ app = FastAPI(title="EVPilot API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:5173").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 class ChatMessagePayload(BaseModel):
     role: Literal["user", "assistant"]
@@ -735,7 +738,7 @@ class ChatRequest(BaseModel):
     vehicle_state: VehicleState = Field(default_factory=VehicleState)
 
 @app.post("/chat")
-async def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_user)):
     try:
         # 1. Convert incoming JSON message payload to LangChain message objects
         langchain_messages = []

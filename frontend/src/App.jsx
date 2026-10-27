@@ -1,11 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo, ThemeToggle } from './components/Brand';
 import { useTheme } from './theme';
 import { useAuth } from './auth';
-
-const API_URL = 'http://localhost:8000/chat';
 
 const SUGGESTIONS = [
   'Trip from Mumbai to Pune',
@@ -36,7 +34,7 @@ const BotAvatar = () => (
 
 export default function App() {
   const [theme, toggleTheme] = useTheme();
-  const { user, logout } = useAuth();
+  const { user, logout, authRequest } = useAuth();
   const navigate = useNavigate();
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -95,17 +93,7 @@ export default function App() {
         vehicle_state: graphState.vehicle_state,
       };
 
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
+      const data = await authRequest('/chat', { body: payload });
 
       // Update local state with updated graph state from backend
       setGraphState(data.state);

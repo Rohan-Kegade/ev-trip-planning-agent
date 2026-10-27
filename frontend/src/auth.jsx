@@ -1,72 +1,74 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { apiRequest } from './api';
 
-// Client-side auth for local development: accounts live in localStorage.
-// signup/login/logout are async so they can be swapped for real API calls
-// (e.g. POST /auth/signup, /auth/login) without touching the pages.
-const USERS_KEY = 'evpilot_users';
+// Session ({ token, user }) from the backend's /auth endpoints, kept in localStorage
 const SESSION_KEY = 'evpilot_session';
 
-const readJSON = (key, fallback) => {
+const readSession = () => {
   try {
-    return JSON.parse(localStorage.getItem(key)) ?? fallback;
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY));
+    return session?.token ? session : null;
   } catch {
-    return fallback;
+    return null;
   }
 };
 
-const writeJSON = (key, value) => {
+const writeSession = (session) => {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else localStorage.removeItem(SESSION_KEY);
   } catch {
     // localStorage unavailable
   }
 };
 
-const hashPassword = async (password) => {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
-  return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
-};
-
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => readJSON(SESSION_KEY, null));
+  const [session, setSession] = useState(readSession);
 
-  const startSession = (account) => {
-    const session = { name: account.name, email: account.email };
-    writeJSON(SESSION_KEY, session);
-    setUser(session);
-  };
+  const saveSession = useCallback((next) => {
+    writeSession(next);
+    setSession(next);
+  }, []);
+
+  const logout = useCallback(() => saveSession(null), [saveSession]);
+
+  // Check a stored token is still valid (it may have expired or the server secret changed)
+  const storedToken = session?.token;
+  useEffect(() => {
+    if (!storedToken) return;
+    apiRequest('/auth/me', { token: storedToken })
+      .then((user) => saveSession({ token: storedToken, user }))
+      .catch((err) => {
+        if (err.status === 401) logout();
+      });
+  }, [storedToken, saveSession, logout]);
 
   const signup = async ({ name, email, password }) => {
-    const users = readJSON(USERS_KEY, {});
-    const key = email.trim().toLowerCase();
-    if (users[key]) throw new Error('An account with this email already exists.');
-
-    const account = { name: name.trim(), email: key, passwordHash: await hashPassword(password) };
-    writeJSON(USERS_KEY, { ...users, [key]: account });
-    startSession(account);
+    saveSession(await apiRequest('/auth/signup', { body: { name, email, password } }));
   };
 
   const login = async ({ email, password }) => {
-    const account = readJSON(USERS_KEY, {})[email.trim().toLowerCase()];
-    if (!account || account.passwordHash !== (await hashPassword(password))) {
-      throw new Error('Incorrect email or password.');
-    }
-    startSession(account);
+    saveSession(await apiRequest('/auth/login', { body: { email, password } }));
   };
 
-  const logout = () => {
+  // For protected API calls: attaches the token and signs out if it's rejected
+  const authRequest = async (path, options = {}) => {
     try {
-      localStorage.removeItem(SESSION_KEY);
-    } catch {
-      // localStorage unavailable
+      return await apiRequest(path, { ...options, token: session?.token });
+    } catch (err) {
+      if (err.status === 401) logout();
+      throw err;
     }
-    setUser(null);
   };
 
-  return <AuthContext.Provider value={{ user, signup, login, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user: session?.user ?? null, signup, login, logout, authRequest }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

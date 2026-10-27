@@ -4,4 +4,4 @@ python-dotenv
 pydantic
 polyline
 fastapi
-uvicorn
+uvicornpyjwt

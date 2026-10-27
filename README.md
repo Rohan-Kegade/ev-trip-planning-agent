@@ -26,7 +26,7 @@ The backend is stateless. The frontend sends the full conversation state with ev
 | Layer | Tech |
 |---|---|
 | Frontend | React 19, Vite, Tailwind CSS |
-| Backend | Python, FastAPI, Uvicorn |
+| Backend | Python, FastAPI, Uvicorn, SQLite + JWT auth |
 | Agent | LangGraph, LangChain, Google Gemini (`langchain-google-genai`) |
 | External APIs | [OpenRouteService](https://openrouteservice.org/) (geocoding + routing), [OpenChargeMap](https://openchargemap.org/) (charging stations) |
 
@@ -35,13 +35,14 @@ The backend is stateless. The frontend sends the full conversation state with ev
 ```
 backend/
   main.py          # LangGraph nodes/routers + FastAPI /chat endpoint + API clients
+  auth.py          # /auth/signup, /auth/login, /auth/me (SQLite users, scrypt hashes, JWT)
   planner.py       # charging plan logic (stops, charge times, total time)
   test_planner.py  # unit tests for the planner
 frontend/
   src/main.jsx     # routes: / (landing), /login, /signup, /app (chat, login required)
   src/App.jsx      # chat UI
   src/pages/       # Landing, Login, Signup
-  src/auth.jsx     # auth context (client-side for now)
+  src/auth.jsx     # auth context: calls /auth endpoints, stores the token
 ```
 
 ## Run locally
@@ -65,7 +66,11 @@ uvicorn main:app --reload      # runs on http://localhost:8000
 GEMINI_API_KEY=
 OPENROUTESERVICE_KEY=
 OPENCHARGEMAP_KEY=
+JWT_SECRET=                    # any long random string, e.g. python -c "import secrets; print(secrets.token_urlsafe(32))"
+CORS_ORIGINS=http://localhost:5173
 ```
+
+If `JWT_SECRET` is empty, a random one is used and everyone is logged out on each restart. User accounts are stored in `backend/users.db` (SQLite, created automatically).
 
 ### 2. Frontend
 
@@ -75,7 +80,7 @@ npm install
 npm run dev                    # runs on http://localhost:5173
 ```
 
-Open http://localhost:5173 and start chatting, e.g. *"I want to drive from Pune to Mumbai."*
+Open http://localhost:5173, create an account and start chatting, e.g. *"I want to drive from Pune to Mumbai."*
 
 ### 3. Tests (optional)
 
