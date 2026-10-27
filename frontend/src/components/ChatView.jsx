@@ -205,13 +205,13 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
                 <div key={idx} className={`flex items-end gap-2.5 msg-in ${isUser ? 'justify-end' : 'justify-start'}`}>
                   {!isUser && <BotAvatar />}
                   <div
-                    className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                    className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 text-sm leading-relaxed ${
                       isUser
                         ? 'bg-gradient-to-br from-indigo-700 to-indigo-600 text-white rounded-2xl rounded-br-md shadow-md shadow-indigo-300/40 dark:shadow-black/30'
                         : 'bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md shadow-sm'
                     }`}
                   >
-                    <MessageContent content={msg.content} />
+                    <MessageContent content={msg.content} markdown={!isUser} />
                   </div>
                 </div>
               );

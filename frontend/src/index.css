@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @theme {
   --font-sans: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

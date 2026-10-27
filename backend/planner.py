@@ -201,49 +201,61 @@ def build_charging_plan(points, stations, one_way_km, drive_minutes, is_round_tr
     }
 
 
+MARKDOWN_SPECIAL = "\\`*_[]<>#|~"
+
+
+def escape_markdown(text):
+    """Station names come from OpenChargeMap; keep their characters from turning into formatting."""
+    return "".join(f"\\{c}" if c in MARKDOWN_SPECIAL else c for c in text)
+
+
 def format_plan_message(plan):
-    """Chat message for a plan. Built in code so every number shown to the user is exact."""
+    """Chat message (Markdown) for a plan. Built in code so every number shown to the user is exact."""
     stops = plan["stops"]
-    lines = []
+    blocks = []
 
     if plan["feasible"]:
         kind = "round trip" if plan["round_trip"] else "trip"
-        lines.append(
-            f"Here is your charging plan for the {kind} ({plan['total_km']:g} km): "
+        blocks.append(
+            f"**Your charging plan** for the {kind} ({plan['total_km']:g} km): "
             f"{len(stops)} charging stop{'s' if len(stops) != 1 else ''}."
         )
     else:
-        lines.append("I could not build a complete charging plan for this trip.")
+        blocks.append("**I could not build a complete charging plan for this trip.**")
         if stops:
-            lines.append("Here are the stops I could plan before the problem:")
+            blocks.append("Here are the stops I could plan before the problem:")
 
-    for number, stop in enumerate(stops, 1):
-        place = stop["name"] or "Charging station"
-        if stop["town"]:
-            place += f", {stop['town']}"
-        leg = f" ({stop['leg']} leg)" if plan["round_trip"] else ""
-        detour = f", {stop['detour_km']:g} km off the route" if stop["detour_km"] >= 0.5 else ""
-        lines.append(f"{number}. {place} at km {stop['km']:g}{leg}{detour}")
-        lines.append(
-            f"   Arrive with about {stop['arrival_soc']:g}%, charge to {stop['charge_to']:g}% "
-            f"(about {format_duration(stop['charge_minutes'])})"
-        )
+    if stops:
+        items = []
+        for number, stop in enumerate(stops, 1):
+            place = escape_markdown(stop["name"] or "Charging station")
+            if stop["town"]:
+                place += f", {escape_markdown(stop['town'])}"
+            leg = f" ({stop['leg']} leg)" if plan["round_trip"] else ""
+            detour = f", {stop['detour_km']:g} km off the route" if stop["detour_km"] >= 0.5 else ""
+            items.append(
+                f"{number}. **{place}** at km {stop['km']:g}{leg}{detour}\n"
+                f"   Arrive with about {stop['arrival_soc']:g}%, charge to {stop['charge_to']:g}% "
+                f"(about {format_duration(stop['charge_minutes'])})"
+            )
+        blocks.append("\n".join(items))
 
     if plan["feasible"]:
-        lines.append(f"You will finish the trip with about {plan['arrival_soc']:g}% battery.")
-        lines.append(
-            f"Estimated total time: {format_duration(plan['total_minutes'])} "
+        blocks.append(
+            f"You will finish the trip with about **{plan['arrival_soc']:g}%** battery.\n"
+            f"**Estimated total time:** {format_duration(plan['total_minutes'])} "
             f"({format_duration(plan['drive_minutes'])} driving + {format_duration(plan['charge_minutes'])} charging)."
         )
-        lines.append("Charging times assume a fast charger of about 50 kW and are approximate.")
+        blocks.append("_Charging times assume a fast charger of about 50 kW and are approximate._")
     else:
         gap = plan["gap"]
-        lines.append(
+        blocks.append(
             f"There are no charging stations I can reach between km {gap['from_km']:g} and km {gap['to_km']:g} "
             "while keeping a safety reserve. You could charge more before you leave, or consider a different route."
         )
 
-    return "\n".join(lines)
+    # A blank line between blocks so Markdown keeps the list separate from the text around it
+    return "\n\n".join(blocks)
 
 
 def google_maps_url(origin, destination, stops, is_round_trip):
