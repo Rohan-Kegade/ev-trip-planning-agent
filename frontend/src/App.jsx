@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug, LogOut } from 'lucide-react';
+import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug, LogOut, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Logo, ThemeToggle } from './components/Brand';
+import SettingsModal, { Avatar } from './components/SettingsModal';
 import { useTheme } from './theme';
 import { useAuth } from './auth';
 
@@ -38,6 +39,7 @@ export default function App() {
   const navigate = useNavigate();
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Entire LangGraph state maintained locally
   const [graphState, setGraphState] = useState({
@@ -297,27 +299,38 @@ export default function App() {
           )}
         </div>
 
-        <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-          <div className="min-w-0 text-sm">
-            <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{user.name}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+        <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <Avatar name={user.name} />
+            <div className="min-w-0 flex-1 text-sm">
+              <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{user.name}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+            </div>
+            <button
+              onClick={() => setSettingsOpen(true)}
+              title="Settings"
+              aria-label="Settings"
+              className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleLogout}
+              title="Log out"
+              aria-label="Log out"
+              className="p-2 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 rounded-xl hover:bg-rose-50 dark:hover:bg-slate-800 transition"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            title="Log out"
-            aria-label="Log out"
-            className="p-2 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 rounded-xl hover:bg-rose-50 dark:hover:bg-slate-800 transition"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
 
-        <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 tracking-wide flex items-center justify-center gap-2">
-          <span className="relative flex w-2 h-2" aria-hidden="true">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
-            <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
-          </span>
-          <span className="shimmer-text font-medium">AI EV Trip Planning Agent</span>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 tracking-wide flex items-center justify-center gap-2">
+            <span className="relative flex w-2 h-2" aria-hidden="true">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
+              <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
+            </span>
+            <span className="shimmer-text font-medium">AI EV Trip Planning Agent</span>
+          </div>
         </div>
       </aside>
 
@@ -405,6 +418,7 @@ export default function App() {
           </form>
         </div>
       </main>
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

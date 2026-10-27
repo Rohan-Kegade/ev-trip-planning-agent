@@ -88,19 +88,18 @@ def normalize_email(value: str) -> str:
         raise ValueError("Enter a valid email address.")
     return value
 
+def strip_name(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError("Name is required.")
+    return value
+
 class SignupRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     email: str = Field(max_length=254)
     password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=256)
 
-    @field_validator("name")
-    @classmethod
-    def strip_name(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("Name is required.")
-        return value
-
+    _name = field_validator("name")(strip_name)
     _email = field_validator("email")(normalize_email)
 
 class LoginRequest(BaseModel):
@@ -113,13 +112,26 @@ class User(BaseModel):
     id: int
     name: str
     email: str
+    created_at: str
+
+class UpdateProfileRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+    _name = field_validator("name")(strip_name)
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=256)
+
+class DeleteAccountRequest(BaseModel):
+    password: str
 
 class AuthResponse(BaseModel):
     token: str
     user: User
 
 def row_to_user(row: sqlite3.Row) -> User:
-    return User(id=row["id"], name=row["name"], email=row["email"])
+    return User(id=row["id"], name=row["name"], email=row["email"], created_at=row["created_at"])
 
 # ==================== Dependency ====================
 
@@ -142,7 +154,7 @@ def get_current_user(
     except (jwt.PyJWTError, KeyError, ValueError):
         raise unauthorized
 
-    row = db.execute("SELECT id, name, email FROM users WHERE id = ?", (user_id,)).fetchone()
+    row = db.execute("SELECT id, name, email, created_at FROM users WHERE id = ?", (user_id,)).fetchone()
     if row is None:
         raise unauthorized
     return row_to_user(row)
@@ -153,22 +165,23 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def signup(request: SignupRequest, db: sqlite3.Connection = Depends(get_db)):
+    created_at = datetime.now(timezone.utc).isoformat()
     try:
         with db:
             cursor = db.execute(
                 "INSERT INTO users (name, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
-                (request.name, request.email, hash_password(request.password), datetime.now(timezone.utc).isoformat()),
+                (request.name, request.email, hash_password(request.password), created_at),
             )
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists.")
 
-    user = User(id=cursor.lastrowid, name=request.name, email=request.email)
+    user = User(id=cursor.lastrowid, name=request.name, email=request.email, created_at=created_at)
     return AuthResponse(token=create_token(user.id), user=user)
 
 @router.post("/login", response_model=AuthResponse)
 def login(request: LoginRequest, db: sqlite3.Connection = Depends(get_db)):
     row = db.execute(
-        "SELECT id, name, email, password_hash FROM users WHERE email = ?", (request.email,)
+        "SELECT id, name, email, created_at, password_hash FROM users WHERE email = ?", (request.email,)
     ).fetchone()
 
     if not verify_password(request.password, row["password_hash"] if row else DUMMY_HASH) or row is None:
@@ -179,3 +192,27 @@ def login(request: LoginRequest, db: sqlite3.Connection = Depends(get_db)):
 @router.get("/me", response_model=User)
 def me(user: User = Depends(get_current_user)):
     return user
+
+@router.patch("/me", response_model=User)
+def update_profile(request: UpdateProfileRequest, user: User = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+    with db:
+        db.execute("UPDATE users SET name = ? WHERE id = ?", (request.name, user.id))
+    return user.model_copy(update={"name": request.name})
+
+def check_password(db: sqlite3.Connection, user_id: int, password: str):
+    row = db.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row is None or not verify_password(password, row["password_hash"]):
+        # 400 rather than 401: the session is fine, only the typed password is wrong
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect.")
+
+@router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(request: ChangePasswordRequest, user: User = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+    check_password(db, user.id, request.current_password)
+    with db:
+        db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(request.new_password), user.id))
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(request: DeleteAccountRequest, user: User = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+    check_password(db, user.id, request.password)
+    with db:
+        db.execute("DELETE FROM users WHERE id = ?", (user.id,))

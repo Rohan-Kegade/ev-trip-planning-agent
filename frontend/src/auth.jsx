@@ -64,8 +64,24 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateProfile = async ({ name }) => {
+    const user = await authRequest('/auth/me', { method: 'PATCH', body: { name } });
+    saveSession({ ...session, user });
+  };
+
+  const changePassword = async ({ currentPassword, newPassword }) => {
+    await authRequest('/auth/password', { body: { current_password: currentPassword, new_password: newPassword } });
+  };
+
+  const deleteAccount = async ({ password }) => {
+    await authRequest('/auth/me', { method: 'DELETE', body: { password } });
+    logout();
+  };
+
+  const value = { user: session?.user ?? null, signup, login, logout, authRequest, updateProfile, changePassword, deleteAccount };
+
   return (
-    <AuthContext.Provider value={{ user: session?.user ?? null, signup, login, logout, authRequest }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -35,13 +35,14 @@ The backend is stateless. The frontend sends the full conversation state with ev
 ```
 backend/
   main.py          # LangGraph nodes/routers + FastAPI /chat endpoint + API clients
-  auth.py          # /auth/signup, /auth/login, /auth/me (SQLite users, scrypt hashes, JWT)
+  auth.py          # /auth endpoints: signup, login, me, profile, password, delete (SQLite, scrypt, JWT)
   planner.py       # charging plan logic (stops, charge times, total time)
   test_planner.py  # unit tests for the planner
 frontend/
   src/main.jsx     # routes: / (landing), /login, /signup, /app (chat, login required)
   src/App.jsx      # chat UI
   src/pages/       # Landing, Login, Signup
+  src/components/SettingsModal.jsx  # profile, password, delete account
   src/auth.jsx     # auth context: calls /auth endpoints, stores the token
 ```
 
