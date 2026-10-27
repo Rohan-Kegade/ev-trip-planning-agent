@@ -11,7 +11,7 @@ const Stat = ({ id, icon: Icon, label, value, detail, children, tone = 'default'
   const toneClass =
     tone === 'warning'
       ? 'bg-amber-50 border-amber-200/80 dark:bg-amber-950/40 dark:border-amber-900'
-      : 'bg-white dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60';
+      : 'bg-white dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/60';
   const content = (
     <>
       <Icon className="w-3.5 h-3.5 shrink-0 text-indigo-500" aria-hidden="true" />
@@ -47,7 +47,7 @@ const Stat = ({ id, icon: Icon, label, value, detail, children, tone = 'default'
         <div
           id={`trip-details-${id}`}
           className={`absolute top-full mt-2 z-10 ${wide ? 'w-96' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[min(20rem,50vh)] overflow-y-auto
-            p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl shadow-slate-900/10 dark:shadow-black/40 msg-in ${align}`}
+            p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 shadow-xl shadow-slate-900/10 dark:shadow-black/40 msg-in ${align}`}
         >
           {panel}
         </div>
@@ -66,7 +66,7 @@ const ALIGN = {
 
 // A label/value row in the details panel
 const Row = ({ label, children }) => (
-  <div className="flex items-baseline justify-between gap-3 py-1 text-xs border-b border-slate-100 dark:border-slate-700/60 last:border-0">
+  <div className="flex items-baseline justify-between gap-3 py-1 text-xs border-b border-slate-200 dark:border-slate-700/60 last:border-0">
     <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
     <dd className="font-medium text-slate-900 dark:text-slate-100 text-right">{children}</dd>
   </div>
@@ -125,7 +125,7 @@ const ChargingDetails = ({ stations, plan }) => (
     {plan?.stops?.length > 0 && (
       <ol className="space-y-2">
         {plan.stops.map((stop, i) => (
-          <li key={`${stop.id}-${stop.km}`} className="flex gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/60">
+          <li key={`${stop.id}-${stop.km}`} className="flex gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-300/80 dark:border-slate-700/60">
             <span className="w-6 h-6 shrink-0 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center">{i + 1}</span>
             <div className="min-w-0 text-sm">
               <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{stop.name || 'Charging station'}</p>
@@ -215,13 +215,13 @@ export default function TripInfoBar({ state }) {
   }, [shown]);
 
   return (
-    <div ref={barRef} className="relative z-20 border-b border-slate-200/70 dark:border-slate-800 px-4 sm:px-6 py-2">
+    <div ref={barRef} className="relative z-20 border-b border-slate-300/70 dark:border-slate-800 px-4 sm:px-6 py-2">
       <div className="relative max-w-5xl mx-auto">
         <button
           onClick={toggleCards}
           aria-expanded={cardsOpen}
           aria-controls="trip-cards"
-          className="sm:hidden w-full flex items-center gap-2 px-3 py-2 pointer-coarse:py-3 rounded-xl border bg-white dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/60 text-left"
+          className="sm:hidden w-full flex items-center gap-2 px-3 py-2 pointer-coarse:py-3 rounded-xl border bg-white dark:bg-slate-800/60 border-slate-300/80 dark:border-slate-700/60 text-left"
         >
           <MapPin className="w-3.5 h-3.5 shrink-0 text-indigo-500" aria-hidden="true" />
           <span className={`min-w-0 flex-1 truncate text-xs font-semibold ${summary ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
@@ -258,7 +258,7 @@ export default function TripInfoBar({ state }) {
               panel={<BatteryDetails soc={soc} range={range} route={route} plan={plan} />}
             >
               {hasSoc && (
-                <span className="w-8 h-1.5 shrink-0 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden" aria-hidden="true">
+                <span className="w-8 h-1.5 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden" aria-hidden="true">
                   <span className={`block h-full rounded-full transition-all duration-700 ${socColor}`} style={{ width: `${socWidth}%` }} />
                 </span>
               )}

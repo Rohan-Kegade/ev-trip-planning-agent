@@ -17,7 +17,7 @@ export const AuthLayout = ({ title, subtitle, children, footer }) => {
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{title}</h1>
             <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
           </div>
-          <div className="rounded-3xl bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200/70 dark:border-slate-800 shadow-xl shadow-indigo-100/40 dark:shadow-black/30 p-6">
+          <div className="rounded-3xl bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-300/70 dark:border-slate-800 shadow-xl shadow-indigo-100/40 dark:shadow-black/30 p-6">
             {children}
           </div>
           <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">{footer}</p>
@@ -34,7 +34,7 @@ export const TextField = ({ label, id, ...props }) => (
       id={id}
       name={id}
       {...props}
-      className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[0.9375rem] pointer-coarse:text-[16px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-500/20 transition"
+      className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[0.9375rem] pointer-coarse:text-[16px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-500/20 transition"
     />
   </div>
 );

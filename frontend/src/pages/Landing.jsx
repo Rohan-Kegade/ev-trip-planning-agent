@@ -31,14 +31,14 @@ const STEPS = [
 
 // Static preview of the chat, so visitors see what they're signing up for
 const ChatPreview = () => (
-  <div className="w-full max-w-md rounded-3xl bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200/70 dark:border-slate-800 shadow-2xl shadow-indigo-200/50 dark:shadow-black/40 p-5 space-y-3">
+  <div className="w-full max-w-md rounded-3xl bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-300/70 dark:border-slate-800 shadow-2xl shadow-indigo-200/50 dark:shadow-black/40 p-5 space-y-3">
     <div className="flex justify-end">
       <p className="max-w-[80%] px-4 py-2.5 text-sm bg-gradient-to-br from-indigo-700 to-indigo-600 text-white rounded-2xl rounded-br-md">
         Pune to Mumbai, battery at 40%
       </p>
     </div>
     <div className="flex justify-start">
-      <p className="max-w-[85%] px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md">
+      <p className="max-w-[85%] px-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-300/80 dark:border-slate-700 rounded-2xl rounded-bl-md">
         That’s 148 km. You’ll need one stop: charge at Lonavala from 22% to 70%, about 35 min.
       </p>
     </div>
@@ -87,7 +87,7 @@ export default function Landing() {
         {/* Hero */}
         <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-20 lg:pt-20 grid lg:grid-cols-2 gap-12 items-center">
           <div>
-            <p className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300">
+            <p className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/80 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> AI trip planning for EV drivers
             </p>
             <h1 className="mt-5 text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
@@ -104,7 +104,7 @@ export default function Landing() {
                 {user ? 'Open planner' : 'Start planning, free'} <ArrowRight className="w-4 h-4" />
               </Link>
               {!user && (
-                <Link to="/login" className="px-6 py-3 rounded-full text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-400 transition">
+                <Link to="/login" className="px-6 py-3 rounded-full text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-400 transition">
                   I have an account
                 </Link>
               )}
@@ -119,7 +119,7 @@ export default function Landing() {
         <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
           <div className="grid sm:grid-cols-3 gap-4">
             {FEATURES.map(({ icon: Icon, title, text }) => (
-              <div key={title} className="p-6 rounded-2xl bg-white/80 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+              <div key={title} className="p-6 rounded-2xl bg-white/80 dark:bg-slate-900/70 border border-slate-300/80 dark:border-slate-800 shadow-sm">
                 <span className="inline-flex p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300">
                   <Icon className="w-5 h-5" />
                 </span>
@@ -138,7 +138,7 @@ export default function Landing() {
               <li key={title} className="text-center">
                 <span className="relative inline-flex w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-cyan-600 text-white items-center justify-center shadow-md shadow-indigo-300/50 dark:shadow-black/30">
                   <Icon className="w-5 h-5" />
-                  <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 text-[11px] font-bold flex items-center justify-center border border-slate-200 dark:border-slate-700">
+                  <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 text-[11px] font-bold flex items-center justify-center border border-slate-300 dark:border-slate-700">
                     {i + 1}
                   </span>
                 </span>
@@ -150,7 +150,7 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="border-t border-slate-200/70 dark:border-slate-800">
+      <footer className="border-t border-slate-300/70 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
           <span>EVPilot · AI EV Trip Planning Agent</span>
           <span>Routes by OpenRouteService · Stations by OpenChargeMap</span>

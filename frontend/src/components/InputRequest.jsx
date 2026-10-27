@@ -12,8 +12,8 @@ const isTyping = (el) => {
 };
 
 const CardShell = ({ title, onDismiss, children }) => (
-  <div className="max-w-4xl mx-auto mb-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 overflow-hidden msg-in">
-    <div className="flex items-center justify-between pl-4 pr-1.5 py-1 border-b border-slate-100 dark:border-slate-800">
+  <div className="max-w-4xl mx-auto mb-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 overflow-hidden msg-in">
+    <div className="flex items-center justify-between pl-4 pr-1.5 py-1 border-b border-slate-200 dark:border-slate-800">
       <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">{title}</p>
       <button
         onClick={onDismiss}
@@ -80,7 +80,7 @@ function ChoiceCard({ options, onSubmit, onAction, onTypeInstead, onDismiss }) {
             </button>
           </li>
         ))}
-        <li className="border-t border-slate-100 dark:border-slate-800 mt-0.5 pt-0.5">
+        <li className="border-t border-slate-200 dark:border-slate-800 mt-0.5 pt-0.5">
           <button
             ref={(el) => (rowRefs.current[options.length] = el)}
             onClick={onTypeInstead}
@@ -166,7 +166,7 @@ function VehicleCard({ fields, onSubmit, onTypeInstead, onDismiss }) {
                   placeholder="e.g. 120"
                   value={range}
                   onChange={(e) => setRange(e.target.value)}
-                  className="w-full pl-3 pr-10 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[0.9375rem] pointer-coarse:text-[16px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-500/20 transition"
+                  className="w-full pl-3 pr-10 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[0.9375rem] pointer-coarse:text-[16px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-500/20 transition"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">km</span>
               </div>
@@ -178,7 +178,7 @@ function VehicleCard({ fields, onSubmit, onTypeInstead, onDismiss }) {
                   className={`px-3 py-1.5 pointer-coarse:py-2.5 rounded-full text-sm border transition ${
                     rangeKm === km
                       ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-indigo-300 dark:hover:border-indigo-400'
+                      : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-indigo-300 dark:hover:border-indigo-400'
                   }`}
                 >
                   {km}

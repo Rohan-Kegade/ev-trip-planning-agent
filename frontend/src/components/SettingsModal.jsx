@@ -93,7 +93,7 @@ function ProfileTab() {
             type="email"
             value={user.email}
             disabled
-            className="w-full px-4 py-2.5 pr-10 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-[0.9375rem] text-slate-500 dark:text-slate-400 cursor-not-allowed"
+            className="w-full px-4 py-2.5 pr-10 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 text-[0.9375rem] text-slate-500 dark:text-slate-400 cursor-not-allowed"
           />
           <Lock className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
         </div>
@@ -215,9 +215,9 @@ export default function SettingsModal({ onClose }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
-        className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-2xl shadow-indigo-200/30 dark:shadow-black/50 msg-in"
+        className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border border-slate-300/70 dark:border-slate-800 shadow-2xl shadow-indigo-200/30 dark:shadow-black/50 msg-in"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
           <h2 id="settings-title" className="font-semibold text-slate-900 dark:text-white">Settings</h2>
           <button
             onClick={onClose}
@@ -230,7 +230,7 @@ export default function SettingsModal({ onClose }) {
 
         <div className="flex flex-col sm:flex-row min-h-0 flex-1">
           {/* Tabs share the width on phones (icon above label) and stack in a column from sm up */}
-          <nav className="sm:w-52 shrink-0 p-2 sm:p-3 flex sm:flex-col gap-1 border-b sm:border-b-0 sm:border-r border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900">
+          <nav className="sm:w-52 shrink-0 p-2 sm:p-3 flex sm:flex-col gap-1 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900">
             {TABS.map(({ id, label, shortLabel, icon: Icon, danger }) => {
               const active = tab === id;
               const color = danger

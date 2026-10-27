@@ -131,7 +131,7 @@ export default function ChatSidebar({
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-80 max-w-[85vw] md:relative md:z-auto md:m-3 md:mr-0 md:max-w-none md:shrink-0 md:overflow-hidden
           bg-white dark:bg-slate-900 md:bg-white/80 md:dark:bg-slate-900/80 md:backdrop-blur md:rounded-3xl
-          border-r md:border border-slate-200/70 dark:border-slate-800 md:shadow-xl md:shadow-indigo-100/40 md:dark:shadow-black/30
+          border-r md:border border-slate-300/70 dark:border-slate-800 md:shadow-xl md:shadow-indigo-100/40 md:dark:shadow-black/30
           transition-[transform,width] duration-300 ease-in-out motion-reduce:transition-none
           ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${collapsed ? 'md:w-16' : 'md:w-72 lg:w-80'}`}
       >
@@ -200,7 +200,7 @@ export default function ChatSidebar({
             )}
           </nav>
 
-          <div className="p-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <div className="p-5 pt-4 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <Avatar name={user.name} />
               <div className="min-w-0 flex-1 text-sm">

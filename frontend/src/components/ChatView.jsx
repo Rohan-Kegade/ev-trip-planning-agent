@@ -169,7 +169,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
   return (
     <main className="flex-1 flex flex-col h-full min-w-0">
       {/* Title */}
-      <header className="px-4 sm:px-6 py-2 border-b border-slate-200/70 dark:border-slate-800 flex items-center gap-3">
+      <header className="px-4 sm:px-6 py-2 border-b border-slate-300/70 dark:border-slate-800 flex items-center gap-3">
         <button
           onClick={onOpenSidebar}
           aria-label="Open chats"
@@ -225,7 +225,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
                   <button
                     key={text}
                     onClick={() => sendMessage(text)}
-                    className="px-4 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:border-indigo-300 dark:hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:shadow-md transition flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:border-indigo-300 dark:hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:shadow-md transition flex items-center gap-1.5"
                   >
                     <Sparkles className="w-3.5 h-3.5" /> {text}
                   </button>
@@ -242,7 +242,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
                     className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 text-sm leading-relaxed ${
                       isUser
                         ? 'bg-gradient-to-br from-indigo-700 to-indigo-600 text-white rounded-2xl rounded-br-md shadow-md shadow-indigo-300/40 dark:shadow-black/30'
-                        : 'bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md shadow-sm'
+                        : 'bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 border border-slate-300/80 dark:border-slate-700 rounded-2xl rounded-bl-md shadow-sm'
                     }`}
                   >
                     <MessageContent content={msg.content} markdown={!isUser} card={msg.card} />
@@ -255,7 +255,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
           {isLoading && (
             <div className="flex items-end gap-2.5 msg-in">
               <BotAvatar />
-              <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md px-4 py-3.5 shadow-sm flex items-center gap-1">
+              <div className="bg-white dark:bg-slate-800 border border-slate-300/80 dark:border-slate-700 rounded-2xl rounded-bl-md px-4 py-3.5 shadow-sm flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-500 animate-bounce [animation-delay:-0.3s]" />
                 <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-500 animate-bounce [animation-delay:-0.15s]" />
                 <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-500 animate-bounce" />
@@ -269,7 +269,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
       {/* Answer card and input, or the ended notice */}
       <div className="px-4 sm:px-6 pb-6 pt-2">
         {ended ? (
-          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-sm">
             <p className="text-sm text-slate-600 dark:text-slate-300 flex items-center gap-2">
               <Lock className="w-4 h-4 text-slate-400" /> This chat has ended. You can still read it.
             </p>
@@ -289,7 +289,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
             )}
             <form
               onSubmit={handleSubmit}
-              className="max-w-4xl mx-auto flex items-stretch gap-2 p-2 pl-5 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:focus-within:ring-indigo-500/20 transition"
+              className="max-w-4xl mx-auto flex items-stretch gap-2 p-2 pl-5 bg-white dark:bg-slate-900 rounded-full border border-slate-300 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:focus-within:ring-indigo-500/20 transition"
             >
               <input
                 ref={inputRef}

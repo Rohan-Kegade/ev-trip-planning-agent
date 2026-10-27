@@ -58,7 +58,7 @@ export default function MessageContent({ content, markdown = false, card }) {
       <>
         <PlanCard card={card} />
         {card.after && (
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
             <Markdown>{card.after}</Markdown>
           </div>
         )}

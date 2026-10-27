@@ -8,7 +8,7 @@ const levelColor = (soc) => (soc > 50 ? 'bg-emerald-500' : soc > 20 ? 'bg-amber-
 // Arrival level, then the part added by charging in a lighter shade
 const ChargeBar = ({ from, to }) => (
   <div
-    className="relative h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"
+    className="relative h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden"
     role="img"
     aria-label={`Arrive with ${from}%, charge to ${to}%`}
   >
@@ -18,7 +18,7 @@ const ChargeBar = ({ from, to }) => (
 );
 
 const Chip = ({ icon: Icon, label, value }) => (
-  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/60">
+  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-300/80 dark:border-slate-700/60">
     <Icon className="w-3.5 h-3.5 shrink-0 text-indigo-500" aria-hidden="true" />
     <span className="text-[11px] text-slate-500 dark:text-slate-400">{label}</span>
     <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{value}</span>
@@ -28,7 +28,7 @@ const Chip = ({ icon: Icon, label, value }) => (
 // One row of the timeline: a marker on the line, then its content
 const Point = ({ marker, last, children }) => (
   <li className="relative flex gap-3 pb-4 last:pb-0">
-    {!last && <span className="absolute left-3 top-6 bottom-0 w-px bg-slate-200 dark:bg-slate-700" aria-hidden="true" />}
+    {!last && <span className="absolute left-3 top-6 bottom-0 w-px bg-slate-300 dark:bg-slate-700" aria-hidden="true" />}
     <span className="relative z-10 w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-xs font-bold">{marker}</span>
     <div className="min-w-0 flex-1 pt-0.5">{children}</div>
   </li>
