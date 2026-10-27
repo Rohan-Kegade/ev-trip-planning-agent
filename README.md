@@ -38,7 +38,10 @@ backend/
   planner.py       # charging plan logic (stops, charge times, total time)
   test_planner.py  # unit tests for the planner
 frontend/
+  src/main.jsx     # routes: / (landing), /login, /signup, /app (chat, login required)
   src/App.jsx      # chat UI
+  src/pages/       # Landing, Login, Signup
+  src/auth.jsx     # auth context (client-side for now)
 ```
 
 ## Run locally

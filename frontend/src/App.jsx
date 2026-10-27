@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug, Sun, Moon } from 'lucide-react';
+import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Logo, ThemeToggle } from './components/Brand';
+import { useTheme } from './theme';
+import { useAuth } from './auth';
 
 const API_URL = 'http://localhost:8000/chat';
 
@@ -30,18 +34,10 @@ const BotAvatar = () => (
   </span>
 );
 
-const getInitialTheme = () => {
-  try {
-    const saved = localStorage.getItem('theme');
-    if (saved === 'light' || saved === 'dark') return saved;
-  } catch {
-    // localStorage unavailable
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-};
-
 export default function App() {
-  const [theme, setTheme] = useState(getInitialTheme);
+  const [theme, toggleTheme] = useTheme();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -62,18 +58,6 @@ export default function App() {
 
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
-
-  // Apply theme to <html> and remember the choice
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    try {
-      localStorage.setItem('theme', theme);
-    } catch {
-      // localStorage unavailable
-    }
-  }, [theme]);
-
-  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -144,6 +128,11 @@ export default function App() {
     sendMessage(inputMessage);
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
   const resetSession = () => {
     setGraphState({
       trip: { origin: null, destination: null, is_round_trip: null },
@@ -175,21 +164,9 @@ export default function App() {
       <aside className="w-80 shrink-0 m-3 mr-0 rounded-3xl bg-white/80 backdrop-blur border border-slate-200/70 shadow-xl shadow-indigo-100/40 dark:bg-slate-900/80 dark:border-slate-800 dark:shadow-black/30 p-5 flex flex-col justify-between overflow-y-auto">
         <div className="space-y-4">
           <div className="flex items-center justify-between pb-2">
-            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2.5 text-slate-900 dark:text-white">
-              <img src="/logo.svg" alt="" className="w-9 h-9 rounded-xl shadow-md shadow-indigo-300/50" />
-              <span>
-                EV<span className="bg-gradient-to-r from-indigo-600 to-cyan-600 dark:from-indigo-400 dark:to-cyan-300 bg-clip-text text-transparent">Pilot</span>
-              </span>
-            </h1>
+            <Logo to="/app" />
             <div className="flex items-center gap-1">
-              <button
-                onClick={toggleTheme}
-                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-                aria-label="Toggle theme"
-                className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
-              >
-                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <button
                 onClick={resetSession}
                 title="New trip"
@@ -332,7 +309,22 @@ export default function App() {
           )}
         </div>
 
-        <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 tracking-wide flex items-center justify-center gap-2">
+        <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+          <div className="min-w-0 text-sm">
+            <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{user.name}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            title="Log out"
+            aria-label="Log out"
+            className="p-2 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 rounded-xl hover:bg-rose-50 dark:hover:bg-slate-800 transition"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 tracking-wide flex items-center justify-center gap-2">
           <span className="relative flex w-2 h-2" aria-hidden="true">
             <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
             <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
