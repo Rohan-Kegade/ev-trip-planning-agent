@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2, LogOut, Settings, X } from 'lucide-react';
-import { Logo, ThemeToggle } from './Brand';
+import { Plus, Trash2, LogOut, Settings, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Logo } from './Brand';
 import { Avatar } from './SettingsModal';
 import { dayLabel } from '../format';
 
@@ -69,101 +69,169 @@ function ChatItem({ conversation, active, onNavigate, onDelete }) {
   );
 }
 
+const RailButton = ({ label, onClick, children }) => (
+  <button
+    onClick={onClick}
+    title={label}
+    aria-label={label}
+    className="p-2.5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
+  >
+    {children}
+  </button>
+);
+
+// Shown in place of the full sidebar when it is collapsed on wider screens: just the main actions
+function RailContent({ user, onExpand, onNewTrip, onOpenSettings, onLogout }) {
+  return (
+    <div className="h-full w-16 flex flex-col items-center gap-1 py-4">
+      <Link to="/app" title="EVPilot" className="mb-2">
+        <img src="/logo.svg" alt="EVPilot" className="w-9 h-9 rounded-xl shadow-md shadow-indigo-300/50" />
+      </Link>
+      <RailButton label="Expand sidebar" onClick={onExpand}>
+        <PanelLeftOpen className="w-4 h-4" />
+      </RailButton>
+      <button
+        onClick={onNewTrip}
+        title="New trip"
+        aria-label="New trip"
+        className="mt-1 w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-600 text-white flex items-center justify-center shadow-md shadow-indigo-300/40 dark:shadow-black/30 hover:scale-105 active:scale-95 transition"
+      >
+        <Plus className="w-4 h-4" />
+      </button>
+
+      <div className="flex-1" />
+
+      <RailButton label="Settings" onClick={onOpenSettings}>
+        <Settings className="w-4 h-4" />
+      </RailButton>
+      <RailButton label="Log out" onClick={onLogout}>
+        <LogOut className="w-4 h-4" />
+      </RailButton>
+      <span className="mt-2" title={`${user.name} (${user.email})`}>
+        <Avatar name={user.name} />
+      </span>
+    </div>
+  );
+}
+
+// Cross-fade between the full content and the rail; "invisible" also takes the hidden one out of
+// keyboard focus and the accessibility tree
+const FADE = 'transition-[opacity,visibility] duration-200 motion-reduce:transition-none';
+
 export default function ChatSidebar({
-  conversations, loading, activeId, onNewTrip, onNavigate, onDelete, user, theme, onToggleTheme, onOpenSettings, onLogout, open, onClose,
+  conversations, loading, activeId, onNewTrip, onNavigate, onDelete, user, onOpenSettings, onLogout, open, onClose,
+  collapsed, onToggleCollapsed,
 }) {
   return (
     <>
       {/* Backdrop for the slide-in sidebar on small screens */}
       {open && <div className="fixed inset-0 z-30 bg-slate-900/40 md:hidden" onClick={onClose} aria-hidden="true" />}
 
+      {/* On wider screens the panel animates between full width and the icon rail */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-80 max-w-[85vw] md:static md:z-auto md:m-3 md:mr-0 md:max-w-none flex flex-col
+        className={`fixed inset-y-0 left-0 z-40 w-80 max-w-[85vw] md:relative md:z-auto md:m-3 md:mr-0 md:max-w-none md:shrink-0 md:overflow-hidden
           bg-white dark:bg-slate-900 md:bg-white/80 md:dark:bg-slate-900/80 md:backdrop-blur md:rounded-3xl
           border-r md:border border-slate-200/70 dark:border-slate-800 md:shadow-xl md:shadow-indigo-100/40 md:dark:shadow-black/30
-          transition-transform duration-200 ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+          transition-[transform,width] duration-300 ease-in-out motion-reduce:transition-none
+          ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} ${collapsed ? 'md:w-16' : 'md:w-80'}`}
       >
-        <div className="p-5 pb-3 flex items-center justify-between">
-          <Logo to="/app" />
-          <div className="flex items-center gap-1">
-            <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+        <div
+          className={`absolute inset-y-0 left-0 hidden md:block ${FADE} ${collapsed ? 'opacity-100 visible delay-100' : 'opacity-0 invisible'}`}
+        >
+          <RailContent user={user} onExpand={onToggleCollapsed} onNewTrip={onNewTrip} onOpenSettings={onOpenSettings} onLogout={onLogout} />
+        </div>
+
+        {/* Fixed width so the text does not reflow while the panel narrows */}
+        <div className={`h-full w-80 max-w-[85vw] md:max-w-none flex flex-col ${FADE} ${collapsed ? 'md:opacity-0 md:invisible' : ''}`}>
+          <div className="p-5 pb-3 flex items-center justify-between">
+            <Logo to="/app" />
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onToggleCollapsed}
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+                className="hidden md:inline-flex p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+              <button
+                onClick={onClose}
+                aria-label="Close sidebar"
+                className="p-2 md:hidden text-slate-500 dark:text-slate-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="px-5">
             <button
-              onClick={onClose}
-              aria-label="Close sidebar"
-              className="p-2 md:hidden text-slate-500 dark:text-slate-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              onClick={onNewTrip}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-600 text-white text-sm font-semibold shadow-md shadow-indigo-300/40 dark:shadow-black/30 hover:scale-[1.02] active:scale-95 transition"
             >
-              <X className="w-4 h-4" />
+              <Plus className="w-4 h-4" /> New trip
             </button>
           </div>
-        </div>
 
-        <div className="px-5">
-          <button
-            onClick={onNewTrip}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-600 text-white text-sm font-semibold shadow-md shadow-indigo-300/40 dark:shadow-black/30 hover:scale-[1.02] active:scale-95 transition"
-          >
-            <Plus className="w-4 h-4" /> New trip
-          </button>
-        </div>
-
-        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4" aria-label="Chats">
-          {loading ? (
-            <div className="space-y-2 px-2" aria-hidden="true">
-              {[0, 1, 2].map((i) => <div key={i} className="h-8 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />)}
-            </div>
-          ) : conversations.length === 0 ? (
-            <p className="px-2 text-sm text-slate-500 dark:text-slate-400">Your trips will appear here.</p>
-          ) : (
-            groupByDay(conversations).map((group) => (
-              <div key={group.label} className="mb-3">
-                <p className="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">{group.label}</p>
-                <div className="space-y-0.5">
-                  {group.items.map((conversation) => (
-                    <ChatItem
-                      key={conversation.id}
-                      conversation={conversation}
-                      active={conversation.id === activeId}
-                      onNavigate={onNavigate}
-                      onDelete={onDelete}
-                    />
-                  ))}
-                </div>
+          <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4" aria-label="Chats">
+            {loading ? (
+              <div className="space-y-2 px-2" aria-hidden="true">
+                {[0, 1, 2].map((i) => <div key={i} className="h-8 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />)}
               </div>
-            ))
-          )}
-        </nav>
+            ) : conversations.length === 0 ? (
+              <p className="px-2 text-sm text-slate-500 dark:text-slate-400">Your trips will appear here.</p>
+            ) : (
+              groupByDay(conversations).map((group) => (
+                <div key={group.label} className="mb-3">
+                  <p className="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">{group.label}</p>
+                  <div className="space-y-0.5">
+                    {group.items.map((conversation) => (
+                      <ChatItem
+                        key={conversation.id}
+                        conversation={conversation}
+                        active={conversation.id === activeId}
+                        onNavigate={onNavigate}
+                        onDelete={onDelete}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </nav>
 
-        <div className="p-5 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <Avatar name={user.name} />
-            <div className="min-w-0 flex-1 text-sm">
-              <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{user.name}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+          <div className="p-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <Avatar name={user.name} />
+              <div className="min-w-0 flex-1 text-sm">
+                <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{user.name}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+              </div>
+              <button
+                onClick={onOpenSettings}
+                title="Settings"
+                aria-label="Settings"
+                className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+              <button
+                onClick={onLogout}
+                title="Log out"
+                aria-label="Log out"
+                className="p-2 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 rounded-xl hover:bg-rose-50 dark:hover:bg-slate-800 transition"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              onClick={onOpenSettings}
-              title="Settings"
-              aria-label="Settings"
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            <button
-              onClick={onLogout}
-              title="Log out"
-              aria-label="Log out"
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 rounded-xl hover:bg-rose-50 dark:hover:bg-slate-800 transition"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
 
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 tracking-wide flex items-center justify-center gap-2">
-            <span className="relative flex w-2 h-2" aria-hidden="true">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
-              <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
-            </span>
-            <span className="shimmer-text font-medium">AI EV Trip Planning Agent</span>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 tracking-wide flex items-center justify-center gap-2">
+              <span className="relative flex w-2 h-2" aria-hidden="true">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
+                <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="shimmer-text font-medium">AI EV Trip Planning Agent</span>
+            </div>
           </div>
         </div>
       </aside>

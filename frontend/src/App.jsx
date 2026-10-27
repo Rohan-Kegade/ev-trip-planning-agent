@@ -8,6 +8,17 @@ import { useAuth } from './auth';
 
 const byNewest = (a, b) => (a.updated_at < b.updated_at ? 1 : -1);
 
+// Remembered per browser; a convenience only, so it falls back to expanded if storage is unavailable
+const COLLAPSED_KEY = 'evpilot_sidebar_collapsed';
+
+const readCollapsed = () => {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
 export default function App() {
   const { conversationId = null } = useParams();
   const navigate = useNavigate();
@@ -15,7 +26,8 @@ export default function App() {
   const { user, logout, authRequest } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [listLoading, setListLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // slide-in sidebar on small screens
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readCollapsed); // icon rail on wider screens
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The new-chat view keeps its key when its first message creates a conversation and the URL
   // changes to it, so the chat is not remounted (and refetched) mid-conversation
@@ -49,6 +61,16 @@ export default function App() {
     if (id === conversationId) startNewTrip();
   };
 
+  const toggleSidebarCollapsed = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0');
+    } catch {
+      // storage unavailable; the choice just isn't remembered
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/');
@@ -66,12 +88,12 @@ export default function App() {
         onNavigate={() => setSidebarOpen(false)}
         onDelete={deleteConversation}
         user={user}
-        theme={theme}
-        onToggleTheme={toggleTheme}
         onOpenSettings={() => setSettingsOpen(true)}
         onLogout={handleLogout}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={toggleSidebarCollapsed}
       />
 
       <ChatView
@@ -81,6 +103,8 @@ export default function App() {
         onCreated={(id) => setDraft((d) => ({ ...d, createdId: id }))}
         onNewTrip={startNewTrip}
         onOpenSidebar={() => setSidebarOpen(true)}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}

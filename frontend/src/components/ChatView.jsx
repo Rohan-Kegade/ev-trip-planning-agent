@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowUp, Bot, Menu, Sparkles, Lock } from 'lucide-react';
+import { ThemeToggle } from './Brand';
 import InputRequest from './InputRequest';
 import MessageContent from './MessageContent';
 import TripInfoBar from './TripInfoBar';
@@ -32,7 +33,7 @@ const BotAvatar = () => (
 
 // One chat: a saved conversation (conversationId) or a new one (null) that is saved on the first message.
 // The server owns the trip state; this only sends the new message and shows what comes back.
-export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip, onOpenSidebar }) {
+export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip, onOpenSidebar, theme, onToggleTheme }) {
   const { authRequest } = useAuth();
   const navigate = useNavigate();
   const [conversation, setConversation] = useState(null);
@@ -160,6 +161,7 @@ export default function ChatView({ conversationId, onSaved, onCreated, onNewTrip
             <Lock className="w-3 h-3" /> Ended
           </span>
         )}
+        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
       </header>
 
       {/* What we know about the trip so far */}
