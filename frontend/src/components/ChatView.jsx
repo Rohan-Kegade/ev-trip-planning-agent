@@ -245,7 +245,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
                         : 'bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md shadow-sm'
                     }`}
                   >
-                    <MessageContent content={msg.content} markdown={!isUser} />
+                    <MessageContent content={msg.content} markdown={!isUser} card={msg.card} />
                   </div>
                 </div>
               );

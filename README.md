@@ -56,6 +56,8 @@ frontend/
   src/components/ChatSidebar.jsx    # new trip button, chats grouped by day, profile
   src/components/ChatView.jsx       # title, trip info bar, messages, input
   src/components/TripInfoBar.jsx    # trip, route, battery and charging summary under the title
+  src/components/PlanCard.jsx       # the charging plan drawn as a timeline card in the chat
+  src/components/MessageContent.jsx # Markdown replies, the Google Maps button and the plan card
   src/components/SettingsModal.jsx  # profile, password, delete account
   src/components/InputRequest.jsx   # option list and battery/range card shown above the chat input
   src/auth.jsx     # auth context: calls /auth endpoints, stores the token

@@ -9,7 +9,7 @@ import os
 import requests
 import polyline
 from concurrent.futures import ThreadPoolExecutor
-from planner import build_charging_plan, format_duration, format_plan_message, google_maps_url, sample_route
+from planner import build_charging_plan, escape_markdown, format_duration, format_plan_message, google_maps_url, sample_route
 from intent import (
     CHANGE_OPTIONS, MAPS_OFFER_OPTIONS, PLAN_OFFER_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS,
     TRIP_CONFIRM_OPTIONS, TRIP_DONE_OPTIONS, TRIP_TYPE_OPTIONS,
@@ -169,6 +169,10 @@ def clean_options(options):
 
 def latest_user_message(state):
     return state["messages"][-1].content if state["messages"] else ""
+
+
+def place(name):
+    return f"**{escape_markdown(name)}**"
 
 
 def describe_trip(trip):
@@ -404,7 +408,7 @@ def ask_for_trip_confirmation(state: TripState):
     trip = state["trip"]
     trip_kind = "a round trip (there and back)" if trip.is_round_trip else "one way"
     message = (
-        f"Just to confirm: you're driving from {trip.origin} to {trip.destination}, {trip_kind}. "
+        f"Just to confirm: you're driving from {place(trip.origin)} to {place(trip.destination)}, **{trip_kind}**. "
         "Is that right? Once you confirm, I'll work out the route, distance and travel time."
     )
 
@@ -460,11 +464,11 @@ def ask_for_route_confirmation(state: TripState):
 
     if trip.is_round_trip:
         summary = (
-            f"Your round trip from {trip.origin} to {trip.destination} and back is {route['distance']:g} km in total, "
-            f"about {time_text} of driving."
+            f"Your round trip from {place(trip.origin)} to {place(trip.destination)} and back is **{route['distance']:g} km** in total, "
+            f"about **{time_text}** of driving."
         )
     else:
-        summary = f"Your one way trip from {trip.origin} to {trip.destination} is {route['distance']:g} km, about {time_text} of driving."
+        summary = f"Your one way trip from {place(trip.origin)} to {place(trip.destination)} is **{route['distance']:g} km**, about **{time_text}** of driving."
 
     message = f"{summary} Shall I go ahead and check your battery and charging needs?"
 
@@ -552,13 +556,16 @@ def is_trip_possible_with_current_vehicle_state(state: TripState):
 
     if route_details["distance"] > current_vehicle_state.range_left:
         message = (
-            f"Your current range of {current_vehicle_state.range_left:g} km is not enough to cover "
-            f"the {route_details['distance']:g} km trip, so you will need to charge along the way. "
+            f"Your current range of **{current_vehicle_state.range_left:g} km** is not enough to cover "
+            f"the **{route_details['distance']:g} km** trip, so you will need to charge along the way. "
             "Shall I search for charging stations along your route?"
         )
         return {"messages": [AIMessage(content=message)], "charging_search_pending": True}
 
-    message = "You have enough range to reach your destination directly. No charging stops required! Would you like this route in Google Maps, so you can start navigating?"
+    message = (
+        "You have enough range to reach your destination directly. **No charging stops required!** "
+        "Would you like this route in Google Maps, so you can start navigating?"
+    )
     return {"messages": [AIMessage(content=message)], "maps_offer_pending": True}
  
 
@@ -578,7 +585,7 @@ def find_charging_stations(state: TripState):
 
     if stations:
         count = len(stations)
-        message = f"Good news, I found {count} charging station{'s' if count != 1 else ''} along your route."
+        message = f"Good news, I found **{count} charging station{'s' if count != 1 else ''}** along your route."
         if failed_lookups:
             message += " Some parts of the route could not be checked, so there may be more."
         message += (
@@ -666,11 +673,23 @@ def plan_charging_stops(state: TripState):
         battery_soc=vehicle_state.battery_soc,
     )
 
-    if not plan["feasible"]:
-        return {"charging_plan": plan, "messages": [AIMessage(content=format_plan_message(plan))], "trip_done": True}
+    # The text is kept for the conversation history; the card data is a snapshot of this plan,
+    # so the card stays correct even after the plan is changed later in the chat
+    question = None if not plan["feasible"] else "Would you like this route with the charging stops in Google Maps, so you can start navigating?"
+    card = {
+        "type": "plan",
+        "plan": plan,
+        "origin": trip.origin,
+        "destination": trip.destination,
+        "start_soc": vehicle_state.battery_soc,
+        "after": question,
+    }
+    message = format_plan_message(plan) + (f"\n\n{question}" if question else "")
+    plan_message = AIMessage(content=message, additional_kwargs={"card": card})
 
-    message = f"{format_plan_message(plan)}\n\nWould you like this route with the charging stops in Google Maps, so you can start navigating?"
-    return {"charging_plan": plan, "messages": [AIMessage(content=message)], "maps_offer_pending": True}
+    if not plan["feasible"]:
+        return {"charging_plan": plan, "messages": [plan_message], "trip_done": True}
+    return {"charging_plan": plan, "messages": [plan_message], "maps_offer_pending": True}
 
 
 def maps_confirmation_extraction(state: TripState):
@@ -698,9 +717,9 @@ def create_maps_route(state: TripState):
     url, included = google_maps_url(trip.origin, trip.destination, stops, trip.is_round_trip)
 
     if not stops:
-        message = f"Here is your route from {trip.origin} to {trip.destination} in Google Maps:"
+        message = f"Here is your route from {place(trip.origin)} to {place(trip.destination)} in Google Maps:"
     else:
-        message = f"Here is your route in Google Maps with {included} charging stop{'s' if included != 1 else ''} added along the way:"
+        message = f"Here is your route in Google Maps with **{included} charging stop{'s' if included != 1 else ''}** added along the way:"
         if included < len(stops):
             message += f" (Google Maps allows only {included} stops in one link, so add the rest from the plan above.)"
     # The UI turns the link on its own line into an "Open in Google Maps" button
@@ -1009,6 +1028,7 @@ app.include_router(conversations_router)
 class ChatMessagePayload(BaseModel):
     role: Literal["user", "assistant"]
     content: str
+    card: dict | None = None  # data for a rich view of this message (the charging plan)
 
 class ConversationState(BaseModel):
     """The graph state saved with each conversation between turns."""
@@ -1034,7 +1054,9 @@ class ChatRequest(BaseModel):
 
 def to_graph_state(saved: ConversationState, message: str) -> TripState:
     messages = [
-        HumanMessage(content=m.content) if m.role == "user" else AIMessage(content=m.content) for m in saved.messages
+        HumanMessage(content=m.content) if m.role == "user"
+        else AIMessage(content=m.content, additional_kwargs={"card": m.card} if m.card else {})
+        for m in saved.messages
     ]
     messages.append(HumanMessage(content=message))
     return {
@@ -1066,7 +1088,11 @@ def to_saved_state(output_state: TripState) -> dict:
         trip=output_state["trip"],
         route=output_state["route"],
         messages=[
-            {"role": "user" if isinstance(m, HumanMessage) else "assistant", "content": m.content}
+            {
+                "role": "user" if isinstance(m, HumanMessage) else "assistant",
+                "content": m.content,
+                "card": m.additional_kwargs.get("card"),
+            }
             for m in output_state["messages"]
         ],
         **{key: output_state[key] for key in (
