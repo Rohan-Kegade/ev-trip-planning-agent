@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowUp, Bot, Menu, Sparkles, Lock } from 'lucide-react';
 import { ThemeToggle } from './Brand';
 import InputRequest from './InputRequest';
-import MessageContent from './MessageContent';
+import MessageContent, { MapsButton } from './MessageContent';
 import TripInfoBar from './TripInfoBar';
 import { PRIMARY_BUTTON } from '../styles';
 import { formatDateTime } from '../format';
@@ -188,6 +188,7 @@ export default function ChatView({ conversationId, summary, onSaved, onCreated, 
             <Lock className="w-3 h-3" /> Ended
           </span>
         )}
+        {graphState.maps_url && <MapsButton href={graphState.maps_url} variant="compact" />}
         <ThemeToggle theme={theme} onToggle={onToggleTheme} />
       </header>
 

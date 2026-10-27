@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { MapPin, Route, Battery, Plug, ChevronDown } from 'lucide-react';
-import { MapsButton } from './MessageContent';
 import { formatTime } from '../format';
 
 const isSet = (value) => value !== null && value !== undefined;
@@ -149,7 +148,7 @@ const ChargingDetails = ({ stations, plan }) => (
 export default function TripInfoBar({ state }) {
   const [openCard, setOpenCard] = useState(null);
   const barRef = useRef(null);
-  const { trip, route, vehicle_state: vehicle, charging_station: stations, charging_plan: plan, maps_url: mapsUrl } = state;
+  const { trip, route, vehicle_state: vehicle, charging_station: stations, charging_plan: plan } = state;
 
   const tripType = !isSet(trip.is_round_trip) ? null : trip.is_round_trip ? 'Round trip' : 'One way';
   const soc = vehicle?.battery_soc;
@@ -247,12 +246,6 @@ export default function TripInfoBar({ state }) {
               panel={<ChargingDetails stations={stations} plan={plan} />}
             />
           </div>
-
-          {mapsUrl && (
-            <div className="shrink-0">
-              <MapsButton href={mapsUrl} variant="compact" />
-            </div>
-          )}
         </div>
       </div>
     </div>
