@@ -93,7 +93,7 @@ function ProfileTab() {
             type="email"
             value={user.email}
             disabled
-            className="w-full px-4 py-2.5 pr-10 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-[15px] text-slate-500 dark:text-slate-400 cursor-not-allowed"
+            className="w-full px-4 py-2.5 pr-10 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-[0.9375rem] text-slate-500 dark:text-slate-400 cursor-not-allowed"
           />
           <Lock className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
         </div>

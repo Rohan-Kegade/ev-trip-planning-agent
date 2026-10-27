@@ -4,9 +4,9 @@ const MAPS_URL_PREFIX = 'https://www.google.com/maps/';
 
 const MAPS_BUTTON_VARIANTS = {
   // In a chat bubble
-  primary: 'bg-gradient-to-br from-indigo-600 to-cyan-600 shadow-md shadow-indigo-300/40 dark:shadow-black/30',
-  // On the coloured route card in the sidebar
-  onColor: 'w-full justify-center bg-white/15 hover:bg-white/25',
+  primary: 'gap-2 px-4 py-2.5 rounded-xl text-sm shadow-md shadow-indigo-300/40 dark:shadow-black/30',
+  // In the trip info bar under the chat title
+  compact: 'gap-1.5 px-3 py-1.5 rounded-full text-xs shadow-sm',
 };
 
 export const MapsButton = ({ href, variant = 'primary' }) => (
@@ -14,7 +14,7 @@ export const MapsButton = ({ href, variant = 'primary' }) => (
     href={href}
     target="_blank"
     rel="noopener noreferrer"
-    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold hover:scale-[1.02] active:scale-95 transition ${MAPS_BUTTON_VARIANTS[variant]}`}
+    className={`inline-flex items-center bg-gradient-to-br from-indigo-600 to-cyan-600 text-white font-semibold hover:scale-[1.02] active:scale-95 transition ${MAPS_BUTTON_VARIANTS[variant]}`}
   >
     <Navigation className="w-4 h-4" /> Open in Google Maps <ExternalLink className="w-3.5 h-3.5 opacity-80" />
   </a>

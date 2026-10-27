@@ -81,6 +81,36 @@ def quick_vehicle_state(text: str) -> tuple[int | None, int | None] | None:
     return battery, range_km
 
 
+VEHICLE_WORDS = {"battery", "range", "charge", "charging", "soc", "km", "kms", "percent"}
+TRIP_WORDS = {"trip", "origin", "destination", "start", "starting", "route", "round", "way", "city", "place"}
+CHANGE_WORDS = {"change", "changes", "update", "edit", "modify", "different", "adjust"}
+# A request to change the trip that says nothing about what to change ("change the trip")
+BARE_TRIP_CHANGE_WORDS = CHANGE_WORDS | {"the", "trip", "my", "i", "want", "to", "make", "plan", "details", "please", "a", "something"}
+
+
+def words_in(text: str) -> list[str]:
+    return re.findall(r"[a-z%]+", text.lower())
+
+
+def quick_change_target(text: str) -> str | None:
+    """"vehicle" or "trip" for what the user wants to change, None if unclear or both."""
+    words = set(words_in(text))
+    vehicle = bool(words & VEHICLE_WORDS) or "%" in text or quick_vehicle_state(text) is not None
+    trip = bool(words & TRIP_WORDS)
+    if vehicle == trip:
+        return None
+    return "vehicle" if vehicle else "trip"
+
+
+def wants_change(text: str) -> bool:
+    return bool(set(words_in(text)) & CHANGE_WORDS)
+
+
+def is_bare_trip_change(text: str) -> bool:
+    words = words_in(text)
+    return bool(words) and all(w in BARE_TRIP_CHANGE_WORDS for w in words)
+
+
 # Answer options the UI offers at each step, as (label, description). The label is sent as the
 # user's message, so each is worded for the parsers above to handle without the LLM.
 TRIP_TYPE_OPTIONS = [
@@ -107,9 +137,14 @@ MAPS_OFFER_OPTIONS = [
     ("Yes, open in Google Maps", "Get a directions link with the charging stops"),
     ("No thanks", "Skip the map"),
 ]
-# Questions about the finished plan; these go to the LLM, which answers from the plan
-PLAN_FOLLOWUP_OPTIONS = [
-    ("How long will I spend charging in total?", ""),
-    ("Where is my first stop?", ""),
-    ("Explain the plan step by step", ""),
+# Shown once the trip is planned. The third item is a UI action: the UI handles those itself
+# instead of sending the label as a message.
+TRIP_DONE_OPTIONS = [
+    ("Make changes to the plan", "Update your battery, range or the trip", None),
+    ("Plan a new trip", "Start a new chat", "new_trip"),
+    ("End chat", "Close this chat", "end_chat"),
+]
+CHANGE_OPTIONS = [
+    ("Battery or range", "Update your current charge"),
+    ("The trip", "Change the origin, destination or trip type"),
 ]

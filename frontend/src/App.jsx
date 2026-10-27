@@ -1,131 +1,52 @@
-import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Battery, MapPin, RefreshCw, Route, Clock, Sparkles, Bot, Plug, LogOut, Settings } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { Logo, ThemeToggle } from './components/Brand';
-import SettingsModal, { Avatar } from './components/SettingsModal';
-import InputRequest from './components/InputRequest';
-import MessageContent, { MapsButton } from './components/MessageContent';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import ChatSidebar from './components/ChatSidebar';
+import ChatView from './components/ChatView';
+import SettingsModal from './components/SettingsModal';
 import { useTheme } from './theme';
 import { useAuth } from './auth';
 
-const SUGGESTIONS = [
-  'Trip from Mumbai to Pune',
-  'Plan a round trip from Delhi to Jaipur',
-  'Help me pick a weekend destination near Bengaluru',
-];
-
-const formatTime = (mins) => {
-  const total = Math.round(mins);
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  if (h === 0) return `${m}m`;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
-};
-
-const Field = ({ label, value }) => (
-  <div className="flex items-center justify-between gap-3 text-sm">
-    <span className="text-slate-500 dark:text-slate-400">{label}</span>
-    <span className={`font-medium truncate ${value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>{value || '—'}</span>
-  </div>
-);
-
-const BotAvatar = () => (
-  <span className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-indigo-600 to-cyan-600 text-white flex items-center justify-center shadow-md shadow-indigo-200">
-    <Bot className="w-4 h-4" />
-  </span>
-);
+const byNewest = (a, b) => (a.updated_at < b.updated_at ? 1 : -1);
 
 export default function App() {
+  const { conversationId = null } = useParams();
+  const navigate = useNavigate();
   const [theme, toggleTheme] = useTheme();
   const { user, logout, authRequest } = useAuth();
-  const navigate = useNavigate();
-  const [inputMessage, setInputMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // How the backend wants the next answer collected: a list of options or battery/range inputs
-  const [inputRequest, setInputRequest] = useState(null);
+  // The new-chat view keeps its key when its first message creates a conversation and the URL
+  // changes to it, so the chat is not remounted (and refetched) mid-conversation
+  const [draft, setDraft] = useState({ key: 0, createdId: null });
 
-  // Entire LangGraph state maintained locally
-  const [graphState, setGraphState] = useState({
-    trip: { origin: null, destination: null, is_round_trip: null },
-    route: null,
-    messages: [],
-    trip_details_retrieved: false,
-    trip_details_confirmed: false,
-    route_details_found: false,
-    route_approved: false,
-    charging_search_pending: false,
-    charging_station: null,
-    charging_plan: null,
-    vehicle_state: { battery_soc: null, range_left: null },
-    maps_offer_pending: false,
-    maps_url: null,
-  });
-
-  const chatEndRef = useRef(null);
-  const inputRef = useRef(null);
-
-  // Auto-scroll chat to bottom
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [graphState.messages, isLoading]);
+    authRequest('/conversations')
+      .then(setConversations)
+      .catch(() => {}) // the list stays empty; opening and sending chats still work
+      .finally(() => setListLoading(false));
+  }, [authRequest]);
 
-  const sendMessage = async (text) => {
-    if (!text.trim() || isLoading) return;
+  // Add or update a chat in the list (new chat, new title, ended)
+  const upsertConversation = useCallback((summary) => {
+    setConversations((list) => [summary, ...list.filter((c) => c.id !== summary.id)].sort(byNewest));
+  }, []);
 
-    const userText = text;
-    setInputMessage('');
-    setInputRequest(null);
-    inputRef.current?.focus();
-    setIsLoading(true);
-
-    // Optimistically add user message to chat feed
-    const updatedMessages = [
-      ...graphState.messages,
-      { role: 'user', content: userText }
-    ];
-    setGraphState((prev) => ({ ...prev, messages: updatedMessages }));
-
-    try {
-      const payload = {
-        message: userText,
-        trip: graphState.trip,
-        route: graphState.route,
-        messages: graphState.messages, // Pass prior history
-        trip_details_retrieved: graphState.trip_details_retrieved,
-        trip_details_confirmed: graphState.trip_details_confirmed,
-        route_details_found: graphState.route_details_found,
-        route_approved: graphState.route_approved,
-        charging_search_pending: graphState.charging_search_pending,
-        charging_station: graphState.charging_station,
-        charging_plan: graphState.charging_plan,
-        vehicle_state: graphState.vehicle_state,
-        maps_offer_pending: graphState.maps_offer_pending,
-        maps_url: graphState.maps_url,
-      };
-
-      const data = await authRequest('/chat', { body: payload });
-
-      // Update local state with updated graph state from backend
-      setGraphState(data.state);
-      setInputRequest(data.input_request ?? null);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setGraphState((prev) => ({
-        ...prev,
-        messages: [
-          ...updatedMessages,
-          { role: 'assistant', content: '⚠️ Error connecting to server. Please check your FastAPI backend.' }
-        ]
-      }));
-    } finally {
-      setIsLoading(false);
-    }
+  const startNewTrip = () => {
+    setDraft((d) => ({ key: d.key + 1, createdId: null }));
+    setSidebarOpen(false);
+    navigate('/app');
   };
 
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    sendMessage(inputMessage);
+  const deleteConversation = async (id) => {
+    try {
+      await authRequest(`/conversations/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      if (err.status !== 404) return; // keep it listed if it could not be deleted
+    }
+    setConversations((list) => list.filter((c) => c.id !== id));
+    if (id === conversationId) startNewTrip();
   };
 
   const handleLogout = () => {
@@ -133,324 +54,35 @@ export default function App() {
     navigate('/');
   };
 
-  const typeInstead = () => {
-    setInputRequest(null);
-    inputRef.current?.focus();
-  };
-
-  const resetSession = () => {
-    setInputRequest(null);
-    setGraphState({
-      trip: { origin: null, destination: null, is_round_trip: null },
-      route: null,
-      messages: [],
-      trip_details_retrieved: false,
-      trip_details_confirmed: false,
-      route_details_found: false,
-      route_approved: false,
-      charging_search_pending: false,
-      charging_station: null,
-      charging_plan: null,
-      vehicle_state: { battery_soc: null, range_left: null },
-      maps_offer_pending: false,
-      maps_url: null,
-    });
-  };
-
-  const socRaw = graphState.vehicle_state?.battery_soc;
-  const hasSoc = socRaw !== null && socRaw !== undefined;
-  const soc = hasSoc ? Math.max(0, Math.min(100, socRaw)) : 0;
-  const socColor = soc > 50 ? 'bg-emerald-500' : soc > 20 ? 'bg-amber-500' : 'bg-rose-500';
-  const rangeLeft = graphState.vehicle_state?.range_left;
-  const tripType = graphState.trip?.is_round_trip;
-  const hasRoute = Boolean(graphState.route);
+  const viewKey = !conversationId || conversationId === draft.createdId ? `new-${draft.key}` : conversationId;
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-cyan-50/40 text-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-200 font-sans antialiased">
+      <ChatSidebar
+        conversations={conversations}
+        loading={listLoading}
+        activeId={conversationId}
+        onNewTrip={startNewTrip}
+        onNavigate={() => setSidebarOpen(false)}
+        onDelete={deleteConversation}
+        user={user}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onLogout={handleLogout}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
-      {/* Sidebar - Real-Time Graph State */}
-      <aside className="w-80 shrink-0 m-3 mr-0 rounded-3xl bg-white/80 backdrop-blur border border-slate-200/70 shadow-xl shadow-indigo-100/40 dark:bg-slate-900/80 dark:border-slate-800 dark:shadow-black/30 p-5 flex flex-col justify-between overflow-y-auto">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between pb-2">
-            <Logo to="/app" />
-            <div className="flex items-center gap-1">
-              <ThemeToggle theme={theme} onToggle={toggleTheme} />
-              <button
-                onClick={resetSession}
-                title="New trip"
-                aria-label="New trip"
-                className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+      <ChatView
+        key={viewKey}
+        conversationId={conversationId}
+        onSaved={upsertConversation}
+        onCreated={(id) => setDraft((d) => ({ ...d, createdId: id }))}
+        onNewTrip={startNewTrip}
+        onOpenSidebar={() => setSidebarOpen(true)}
+      />
 
-          {/* Trip Info Widget */}
-          <section className="p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-2.5">
-            <h2 className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Trip Details
-            </h2>
-            <Field label="From" value={graphState.trip?.origin} />
-            <Field label="To" value={graphState.trip?.destination} />
-            <Field
-              label="Type"
-              value={tripType !== null && tripType !== undefined ? (tripType ? 'Round trip' : 'One way') : null}
-            />
-          </section>
-
-          {/* Route Stats Widget */}
-          <section
-            className={`p-4 rounded-2xl transition-colors ${
-              hasRoute
-                ? 'bg-gradient-to-br from-indigo-600 to-cyan-700 text-white shadow-lg shadow-indigo-300/40'
-                : 'bg-white dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 shadow-sm'
-            }`}
-          >
-            <h2
-              className={`text-[11px] font-semibold uppercase tracking-widest flex items-center gap-1.5 mb-3 ${
-                hasRoute ? 'text-white/90' : 'text-slate-500 dark:text-slate-400'
-              }`}
-            >
-              <Route className={`w-3.5 h-3.5 ${hasRoute ? '' : 'text-indigo-500'}`} /> Route Summary
-              {hasRoute && (
-                <span className="ml-auto normal-case tracking-normal px-2 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-medium">
-                  {tripType ? 'Round trip total' : 'One way'}
-                </span>
-              )}
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className={`text-2xl font-bold leading-none ${hasRoute ? '' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {hasRoute ? graphState.route.distance : '—'}
-                  {hasRoute && <span className="text-sm font-medium text-white/90 ml-1">km</span>}
-                </p>
-                <p className={`text-xs mt-1 ${hasRoute ? 'text-white/90' : 'text-slate-500 dark:text-slate-400'}`}>Distance</p>
-              </div>
-              <div>
-                <p className={`text-2xl font-bold leading-none ${hasRoute ? '' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {hasRoute ? formatTime(graphState.route.time) : '—'}
-                </p>
-                <p className={`text-xs mt-1 flex items-center gap-1 ${hasRoute ? 'text-white/90' : 'text-slate-500 dark:text-slate-400'}`}>
-                  <Clock className="w-3 h-3" /> Est. time
-                </p>
-              </div>
-            </div>
-            {hasRoute && graphState.maps_url && (
-              <div className="mt-4">
-                <MapsButton href={graphState.maps_url} variant="onColor" />
-              </div>
-            )}
-          </section>
-
-          {/* Vehicle Status Widget */}
-          <section className="p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-3">
-            <h2 className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-              <Battery className="w-3.5 h-3.5 text-indigo-500" /> EV Battery
-            </h2>
-            <div>
-              <div className="flex items-end justify-between mb-1.5">
-                <span className="text-sm text-slate-500 dark:text-slate-400">State of charge</span>
-                <span className={`text-lg font-bold leading-none ${hasSoc ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {hasSoc ? `${socRaw}%` : '—'}
-                </span>
-              </div>
-              <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-700 ${socColor}`} style={{ width: `${soc}%` }} />
-              </div>
-            </div>
-            <Field
-              label="Range left"
-              value={rangeLeft !== null && rangeLeft !== undefined ? `${rangeLeft} km` : null}
-            />
-          </section>
-
-          {/* Charging Plan */}
-          {graphState.charging_plan && (
-            <section className="p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-3">
-              <h2 className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Plug className="w-3.5 h-3.5 text-indigo-500" /> Charging Plan
-              </h2>
-
-              {graphState.charging_plan.stops.length > 0 && (
-                <ol className="space-y-3">
-                  {graphState.charging_plan.stops.map((stop, i) => (
-                    <li key={`${stop.id}-${stop.km}`} className="flex gap-3">
-                      <span className="w-6 h-6 shrink-0 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center">
-                        {i + 1}
-                      </span>
-                      <div className="min-w-0 text-sm">
-                        <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{stop.name || 'Charging station'}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {[stop.town, `km ${stop.km}`, graphState.charging_plan.round_trip ? `${stop.leg} leg` : null].filter(Boolean).join(' · ')}
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {stop.arrival_soc}% → {stop.charge_to}% · ~{formatTime(stop.charge_minutes)}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-
-              {graphState.charging_plan.feasible ? (
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-700 space-y-2">
-                  <Field label="Finish with" value={`${graphState.charging_plan.arrival_soc}%`} />
-                  <Field label="Charging" value={formatTime(graphState.charging_plan.charge_minutes)} />
-                  <Field label="Total time" value={formatTime(graphState.charging_plan.total_minutes)} />
-                </div>
-              ) : (
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  No reachable stations between km {graphState.charging_plan.gap?.from_km} and km {graphState.charging_plan.gap?.to_km}
-                </p>
-              )}
-            </section>
-          )}
-
-          {/* Found Stations Counter */}
-          {Array.isArray(graphState.charging_station) && graphState.charging_station.length === 0 && (
-            <div className="p-4 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300 rounded-2xl border border-amber-200/80 dark:border-amber-900 text-sm flex items-center gap-3">
-              <span className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/60"><Plug className="w-4 h-4" /></span>
-              <span>No charging stations found along your route</span>
-            </div>
-          )}
-          {!graphState.charging_plan && graphState.charging_station && graphState.charging_station.length > 0 && (
-            <div className="p-4 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-2xl border border-emerald-200/80 dark:border-emerald-900 text-sm flex items-center gap-3">
-              <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/60"><Plug className="w-4 h-4" /></span>
-              <span><strong>{graphState.charging_station.length}</strong> charging station{graphState.charging_station.length !== 1 ? 's' : ''} found along your route</span>
-            </div>
-          )}
-        </div>
-
-        <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <Avatar name={user.name} />
-            <div className="min-w-0 flex-1 text-sm">
-              <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{user.name}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
-            </div>
-            <button
-              onClick={() => setSettingsOpen(true)}
-              title="Settings"
-              aria-label="Settings"
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-xl hover:bg-indigo-50 dark:hover:bg-slate-800 transition"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleLogout}
-              title="Log out"
-              aria-label="Log out"
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 rounded-xl hover:bg-rose-50 dark:hover:bg-slate-800 transition"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 tracking-wide flex items-center justify-center gap-2">
-            <span className="relative flex w-2 h-2" aria-hidden="true">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
-              <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
-            </span>
-            <span className="shimmer-text font-medium">AI EV Trip Planning Agent</span>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Chat Interface */}
-      <main className="flex-1 flex flex-col h-full min-w-0">
-
-        {/* Messages Feed */}
-        <div className="flex-1 overflow-y-auto px-6 pt-8 pb-4">
-          <div className="max-w-3xl mx-auto space-y-5 min-h-full flex flex-col">
-            {graphState.messages.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <img src="/logo.svg" alt="" className="w-20 h-20 rounded-3xl shadow-xl shadow-indigo-300/50 mb-6" />
-                <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Where to next?</h2>
-                <p className="text-slate-500 dark:text-slate-400 mt-2 max-w-md">
-                  Tell me where you&apos;re headed and I&apos;ll plan the route, check your range and find charging stops.
-                </p>
-                <div className="flex flex-wrap justify-center gap-2 mt-8">
-                  {SUGGESTIONS.map((text) => (
-                    <button
-                      key={text}
-                      onClick={() => sendMessage(text)}
-                      className="px-4 py-2 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:border-indigo-300 dark:hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:shadow-md transition flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" /> {text}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              graphState.messages.map((msg, idx) => {
-                const isUser = msg.role === 'user';
-                return (
-                  <div key={idx} className={`flex items-end gap-2.5 msg-in ${isUser ? 'justify-end' : 'justify-start'}`}>
-                    {!isUser && <BotAvatar />}
-                    <div
-                      className={`max-w-[75%] px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap ${
-                        isUser
-                          ? 'bg-gradient-to-br from-indigo-700 to-indigo-600 text-white rounded-2xl rounded-br-md shadow-md shadow-indigo-300/40'
-                          : 'bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md shadow-sm'
-                      }`}
-                    >
-                      <MessageContent content={msg.content} />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-
-            {isLoading && (
-              <div className="flex items-end gap-2.5 msg-in">
-                <BotAvatar />
-                <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md px-4 py-3.5 shadow-sm flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-500 animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-500 animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-500 animate-bounce" />
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-        </div>
-
-        {/* Message Input Bar */}
-        <div className="px-6 pb-6 pt-2">
-          {!isLoading && inputRequest && (
-            <InputRequest
-              key={graphState.messages.length}
-              request={inputRequest}
-              onSubmit={sendMessage}
-              onTypeInstead={typeInstead}
-              onDismiss={() => setInputRequest(null)}
-            />
-          )}
-          <form
-            onSubmit={handleSendMessage}
-            className="max-w-3xl mx-auto flex items-center gap-2 p-2 pl-5 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-lg shadow-indigo-100/50 dark:shadow-black/30 focus-within:border-indigo-300 dark:focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:focus-within:ring-indigo-500/20 transition"
-          >
-            <input
-              ref={inputRef}
-              data-chat-input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              placeholder={inputRequest ? 'Or type your answer...' : 'Type your trip details or response...'}
-              className="flex-1 bg-transparent text-[15px] text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !inputMessage.trim()}
-              aria-label="Send"
-              className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-indigo-600 to-cyan-600 text-white flex items-center justify-center shadow-md shadow-indigo-300/50 hover:scale-105 active:scale-95 transition disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
-            >
-              <ArrowUp className="w-5 h-5" />
-            </button>
-          </form>
-        </div>
-      </main>
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );

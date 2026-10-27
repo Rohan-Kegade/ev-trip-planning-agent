@@ -54,15 +54,16 @@ export function AuthProvider({ children }) {
     saveSession(await apiRequest('/auth/login', { body: { email, password } }));
   };
 
-  // For protected API calls: attaches the token and signs out if it's rejected
-  const authRequest = async (path, options = {}) => {
+  // For protected API calls: attaches the token and signs out if it's rejected.
+  // Stable while the token is, so pages can load data with it in an effect.
+  const authRequest = useCallback(async (path, options = {}) => {
     try {
-      return await apiRequest(path, { ...options, token: session?.token });
+      return await apiRequest(path, { ...options, token: storedToken });
     } catch (err) {
       if (err.status === 401) logout();
       throw err;
     }
-  };
+  }, [storedToken, logout]);
 
   const updateProfile = async ({ name }) => {
     const user = await authRequest('/auth/me', { method: 'PATCH', body: { name } });

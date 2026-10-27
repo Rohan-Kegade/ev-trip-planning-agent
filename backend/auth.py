@@ -30,8 +30,12 @@ if not JWT_SECRET:
 # ==================== Database ====================
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    # FastAPI may open the connection and run the endpoint in different thread-pool threads;
+    # each request still uses its connection one step at a time, so this is safe
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    # Off by default in SQLite; needed so deleting a user also deletes their conversations
+    conn.execute("PRAGMA foreign_keys = ON")
     try:
         yield conn
     finally:

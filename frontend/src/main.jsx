@@ -17,6 +17,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/app" element={<RequireAuth><App /></RequireAuth>} />
+          <Route path="/app/:conversationId" element={<RequireAuth><App /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>

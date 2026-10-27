@@ -28,10 +28,12 @@ const CardShell = ({ title, onDismiss, children }) => (
   </div>
 );
 
-// Numbered options plus "Something else"; 1-9 picks an option, arrow keys move between rows
-function ChoiceCard({ options, onSubmit, onTypeInstead, onDismiss }) {
+// Numbered options plus "Something else"; 1-9 picks an option, arrow keys move between rows.
+// An option with an action (e.g. "new_trip") is handled by the page instead of being sent as a message.
+function ChoiceCard({ options, onSubmit, onAction, onTypeInstead, onDismiss }) {
   const rowRefs = useRef([]);
   const rowCount = options.length + 1;
+  const pick = (option) => (option.action ? onAction(option.action) : onSubmit(option.label));
 
   useEffect(() => {
     const onKey = (e) => {
@@ -39,12 +41,12 @@ function ChoiceCard({ options, onSubmit, onTypeInstead, onDismiss }) {
       const n = Number(e.key);
       if (n >= 1 && n <= options.length) {
         e.preventDefault();
-        onSubmit(options[n - 1].label);
+        pick(options[n - 1]);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [options, onSubmit]);
+  });
 
   const moveFocus = (e, index) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -63,7 +65,7 @@ function ChoiceCard({ options, onSubmit, onTypeInstead, onDismiss }) {
           <li key={option.label}>
             <button
               ref={(el) => (rowRefs.current[i] = el)}
-              onClick={() => onSubmit(option.label)}
+              onClick={() => pick(option)}
               onKeyDown={(e) => moveFocus(e, i)}
               className={rowClass}
             >
@@ -166,7 +168,7 @@ function VehicleCard({ fields, onSubmit, onTypeInstead, onDismiss }) {
                   placeholder="e.g. 120"
                   value={range}
                   onChange={(e) => setRange(e.target.value)}
-                  className="w-full pl-3 pr-10 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[15px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-500/20 transition"
+                  className="w-full pl-3 pr-10 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[0.9375rem] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-indigo-300 dark:focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-500/20 transition"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">km</span>
               </div>
@@ -204,9 +206,11 @@ function VehicleCard({ fields, onSubmit, onTypeInstead, onDismiss }) {
   );
 }
 
-export default function InputRequest({ request, onSubmit, onTypeInstead, onDismiss }) {
+export default function InputRequest({ request, onSubmit, onAction, onTypeInstead, onDismiss }) {
   if (request.type === 'choice' && request.options?.length) {
-    return <ChoiceCard options={request.options} onSubmit={onSubmit} onTypeInstead={onTypeInstead} onDismiss={onDismiss} />;
+    return (
+      <ChoiceCard options={request.options} onSubmit={onSubmit} onAction={onAction} onTypeInstead={onTypeInstead} onDismiss={onDismiss} />
+    );
   }
   if (request.type === 'vehicle' && request.fields?.length) {
     return <VehicleCard fields={request.fields} onSubmit={onSubmit} onTypeInstead={onTypeInstead} onDismiss={onDismiss} />;

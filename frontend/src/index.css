@@ -6,6 +6,11 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Base size for the whole app: Tailwind's rem-based text and spacing scale with it (default 16px) */
+html {
+  font-size: 15px;
+}
+
 .dark {
   color-scheme: dark;
 }

@@ -1,8 +1,9 @@
 """Quick checks for intent.py. Run: python test_intent.py"""
 
 from intent import (
-    MAPS_OFFER_OPTIONS, PLAN_OFFER_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS, TRIP_CONFIRM_OPTIONS, TRIP_TYPE_OPTIONS,
-    quick_trip_type, quick_vehicle_state, quick_yes_no,
+    CHANGE_OPTIONS, MAPS_OFFER_OPTIONS, PLAN_OFFER_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS, TRIP_CONFIRM_OPTIONS,
+    TRIP_DONE_OPTIONS, TRIP_TYPE_OPTIONS,
+    is_bare_trip_change, quick_change_target, quick_trip_type, quick_vehicle_state, quick_yes_no, wants_change,
 )
 
 
@@ -66,3 +67,15 @@ check("card: range only", quick_vehicle_state("Range 120 km") == (None, 120))
 check("change -> no", quick_yes_no("change it") is False)
 check("yes, change -> llm", quick_yes_no("yes, change the time") is None)
 check("change to place -> llm", quick_yes_no("change destination to Nashik") is None)
+
+# -- changing a finished plan --
+check("options: change targets", [quick_change_target(label) for label, _ in CHANGE_OPTIONS] == ["vehicle", "trip"])
+check("options: make changes is a change request", wants_change(TRIP_DONE_OPTIONS[0][0]) and quick_change_target(TRIP_DONE_OPTIONS[0][0]) is None)
+check("change battery", quick_change_target("change my battery to 80%") == "vehicle")
+check("new range", quick_change_target("range is 200 km now") == "vehicle")
+check("change destination", quick_change_target("change destination to Nashik") == "trip")
+check("make it one way", quick_change_target("make it one way") == "trip")
+check("both -> unclear", quick_change_target("change the trip and the battery") is None)
+check("plan question is not a change", not wants_change("how long will I charge at the first stop?"))
+check("bare trip change", is_bare_trip_change("The trip") and is_bare_trip_change("change the trip"))
+check("specific trip change", not is_bare_trip_change("change destination to Nashik"))

@@ -11,14 +11,14 @@ import polyline
 from concurrent.futures import ThreadPoolExecutor
 from planner import build_charging_plan, format_duration, format_plan_message, google_maps_url, sample_route
 from intent import (
-    MAPS_OFFER_OPTIONS, PLAN_FOLLOWUP_OPTIONS, PLAN_OFFER_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS,
-    TRIP_CONFIRM_OPTIONS,
-    TRIP_TYPE_OPTIONS,
-    quick_trip_type, quick_vehicle_state, quick_yes_no,
+    CHANGE_OPTIONS, MAPS_OFFER_OPTIONS, PLAN_OFFER_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS,
+    TRIP_CONFIRM_OPTIONS, TRIP_DONE_OPTIONS, TRIP_TYPE_OPTIONS,
+    is_bare_trip_change, quick_change_target, quick_trip_type, quick_vehicle_state, quick_yes_no, wants_change,
 )
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from auth import router as auth_router, get_current_user, User
+from auth import router as auth_router, get_current_user, get_db, User
+from conversations import router as conversations_router, get_conversation_row, save_conversation
 
 load_dotenv()
 
@@ -99,6 +99,12 @@ class MapsApproval(BaseModel):
     )
 
 
+class ChangeTarget(BaseModel):
+    target: Literal["vehicle", "trip"] = Field(
+        description="vehicle if the user wants to change their battery or range; trip if they want to change the origin, destination or trip type."
+    )
+
+
 class VehicleState(BaseModel):
     battery_soc: int | None = Field(default=None, description="Battery in Percentage", le=100, ge=-1)
     range_left: int | None = Field(default=None, description="Estimated remaining range in kilometers")
@@ -124,6 +130,9 @@ class TripState(TypedDict):
     maps_offer_pending: bool
     maps_offer_approved: bool
     maps_url: str | None
+    trip_done: bool
+    change_pending: bool
+    change_target: str | None
 
 
 # llm
@@ -134,6 +143,7 @@ structured_llm_trip_approval = llm.with_structured_output(TripApproval)
 structured_llm_charging_approval = llm.with_structured_output(ChargingApproval)
 structured_llm_plan_approval = llm.with_structured_output(PlanApproval)
 structured_llm_maps_approval = llm.with_structured_output(MapsApproval)
+structured_llm_change_target = llm.with_structured_output(ChangeTarget)
 structured_llm_message = llm.with_structured_output(LLMMessage)
 structured_llm_reply_with_options = llm.with_structured_output(ReplyWithOptions)
 
@@ -657,7 +667,7 @@ def plan_charging_stops(state: TripState):
     )
 
     if not plan["feasible"]:
-        return {"charging_plan": plan, "messages": [AIMessage(content=format_plan_message(plan))]}
+        return {"charging_plan": plan, "messages": [AIMessage(content=format_plan_message(plan))], "trip_done": True}
 
     message = f"{format_plan_message(plan)}\n\nWould you like this route with the charging stops in Google Maps, so you can start navigating?"
     return {"charging_plan": plan, "messages": [AIMessage(content=message)], "maps_offer_pending": True}
@@ -696,13 +706,61 @@ def create_maps_route(state: TripState):
     # The UI turns the link on its own line into an "Open in Google Maps" button
     message += f"\n{url}"
 
-    return {"maps_url": url, "messages": [AIMessage(content=message)]}
+    return {"maps_url": url, "messages": [AIMessage(content=message)], "trip_done": True}
 
 
 def decline_maps_route(state: TripState):
     print("decline_maps_route")
 
-    return {"messages": [AIMessage(content="No problem. Have a safe trip!")]}
+    return {"messages": [AIMessage(content="No problem. Have a safe trip!")], "trip_done": True}
+
+
+def ask_what_to_change(state: TripState):
+    print("ask_what_to_change")
+
+    return {
+        "messages": [AIMessage(content="Sure. What would you like to change?")],
+        "trip_done": False,
+        "change_pending": True,
+    }
+
+
+def apply_change(state: TripState):
+    print("apply_change")
+
+    text = latest_user_message(state)
+    target = quick_change_target(text)
+    if target is None:
+        prompt = f"""
+            The user has a finished EV trip plan and wants to change something.
+            Decide whether they want to change their battery or range (vehicle), or the origin, destination or trip type (trip).
+
+            Conversation:
+            {format_conversation(state["messages"])}
+        """
+        target = structured_llm_change_target.invoke(prompt).target
+
+    # Everything after the changed step is planned again
+    update = {
+        "change_target": target,
+        "change_pending": False,
+        "trip_done": False,
+        "vehicle_state": VehicleState(),
+        "charging_search_pending": False,
+        "charging_station": None,
+        "charging_plan": None,
+        "maps_offer_pending": False,
+        "maps_url": None,
+    }
+    if target == "trip":
+        update.update({
+            "trip_details_retrieved": False,
+            "trip_details_confirmed": False,
+            "route": None,
+            "route_details_found": False,
+            "route_approved": False,
+        })
+    return update
 
 
 def answer_plan_followup(state: TripState):
@@ -712,13 +770,13 @@ def answer_plan_followup(state: TripState):
         You are an intelligent EV trip-planning assistant. The charging plan below has already been shared with the user.
 
         Answer the user's latest message using only this plan and the conversation. Do not invent stations, distances, battery levels or times.
-        If the user wants to plan a different trip, tell them to press the new trip button in the sidebar.
+        If the user wants to plan a different trip, tell them to choose "Plan a new trip".
         Do not answer anything unrelated to EV trip planning.
 
         Trip: {describe_trip(state["trip"])}
 
         Charging plan:
-        {format_plan_message(state["charging_plan"])}
+        {format_plan_message(state["charging_plan"]) if state["charging_plan"] else "No charging stops needed: the current range covers the trip."}
 
         Conversation:
         {format_conversation(state["messages"])}
@@ -729,7 +787,14 @@ def answer_plan_followup(state: TripState):
 
 
 def choice(options):
-    return {"type": "choice", "options": [{"label": label, "description": description} for label, description in options]}
+    # (label, description) or (label, description, action); an action is handled by the UI itself
+    return {
+        "type": "choice",
+        "options": [
+            {"label": option[0], "description": option[1], **({"action": option[2]} if len(option) > 2 and option[2] else {})}
+            for option in options
+        ],
+    }
 
 
 def input_request_for(state) -> dict | None:
@@ -743,8 +808,12 @@ def input_request_for(state) -> dict | None:
 
     if state["maps_offer_pending"]:
         return choice(MAPS_OFFER_OPTIONS)
+    if state["change_pending"]:
+        return choice(CHANGE_OPTIONS)
+    if state["trip_done"]:
+        return choice(TRIP_DONE_OPTIONS)
     if state["charging_plan"]:
-        return choice(PLAN_FOLLOWUP_OPTIONS)
+        return None  # the trip is done; questions about the plan are typed
     if state["charging_station"]:
         return choice(PLAN_OFFER_OPTIONS)
     if state["charging_search_pending"]:
@@ -764,10 +833,20 @@ def input_request_for(state) -> dict | None:
 
 
 # routers
-def router_after_start(state: TripState) -> Literal["maps_confirmation_extraction", "extract_trip_details", "trip_confirmation_extraction", "route_confirmation_extraction", "charging_confirmation_extraction", "extract_vehicle_state_information", "answer_plan_followup", "plan_confirmation_extraction"]:
+def router_after_start(state: TripState) -> Literal["maps_confirmation_extraction", "ask_what_to_change", "apply_change", "extract_trip_details", "trip_confirmation_extraction", "route_confirmation_extraction", "charging_confirmation_extraction", "extract_vehicle_state_information", "answer_plan_followup", "plan_confirmation_extraction"]:
 
     if state['maps_offer_pending']:
         return "maps_confirmation_extraction"
+
+    if state['change_pending']:
+        return "apply_change"
+
+    if state['trip_done']:
+        # "Change the battery to 80%" goes straight to the change; a question about the plan is answered
+        text = latest_user_message(state)
+        if wants_change(text):
+            return "apply_change" if quick_change_target(text) else "ask_what_to_change"
+        return "answer_plan_followup"
 
     if state['charging_plan']:
         return "answer_plan_followup"
@@ -840,6 +919,16 @@ def router_maps_approval(state: TripState) -> Literal["create_maps_route", "decl
     return "decline_maps_route"
 
 
+def router_after_change(state: TripState) -> Literal["extract_vehicle_state_information", "gather_vehicle_state_information", "extract_trip_details", "gather_trip_details"]:
+
+    text = latest_user_message(state)
+    if state["change_target"] == "vehicle":
+        # "Battery 80%" can be used right away; "Battery or range" needs the question first
+        return "extract_vehicle_state_information" if quick_vehicle_state(text) else "gather_vehicle_state_information"
+
+    return "gather_trip_details" if is_bare_trip_change(text) else "extract_trip_details"
+
+
 def router_plan_approval(state: TripState) -> Literal["plan_charging_stops", "decline_charging_plan"]:
 
     if state["charging_plan_approved"]:
@@ -871,6 +960,8 @@ graph.add_node("answer_plan_followup", answer_plan_followup)
 graph.add_node("maps_confirmation_extraction", maps_confirmation_extraction)
 graph.add_node("create_maps_route", create_maps_route)
 graph.add_node("decline_maps_route", decline_maps_route)
+graph.add_node("ask_what_to_change", ask_what_to_change)
+graph.add_node("apply_change", apply_change)
 
 graph.add_conditional_edges(START, router_after_start)
 graph.add_edge("extract_trip_details", "validate_trip_details")
@@ -895,6 +986,8 @@ graph.add_edge("answer_plan_followup", END)
 graph.add_conditional_edges("maps_confirmation_extraction", router_maps_approval)
 graph.add_edge("create_maps_route", END)
 graph.add_edge("decline_maps_route", END)
+graph.add_edge("ask_what_to_change", END)
+graph.add_conditional_edges("apply_change", router_after_change)
 
 app_graph = graph.compile()
 
@@ -911,13 +1004,14 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(conversations_router)
 
 class ChatMessagePayload(BaseModel):
     role: Literal["user", "assistant"]
     content: str
 
-class ChatRequest(BaseModel):
-    message: str
+class ConversationState(BaseModel):
+    """The graph state saved with each conversation between turns."""
     trip: TripDetails = Field(default_factory=TripDetails)
     route: RouteDetails | None = None
     messages: list[ChatMessagePayload] = Field(default_factory=list)
@@ -931,76 +1025,88 @@ class ChatRequest(BaseModel):
     vehicle_state: VehicleState = Field(default_factory=VehicleState)
     maps_offer_pending: bool = False
     maps_url: str | None = None
+    trip_done: bool = False
+    change_pending: bool = False
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+    conversation_id: str | None = None  # None starts a new conversation
+
+def to_graph_state(saved: ConversationState, message: str) -> TripState:
+    messages = [
+        HumanMessage(content=m.content) if m.role == "user" else AIMessage(content=m.content) for m in saved.messages
+    ]
+    messages.append(HumanMessage(content=message))
+    return {
+        "trip": saved.trip,
+        "route": saved.route.model_dump() if saved.route else None,
+        "messages": messages,
+        "trip_details_retrieved": saved.trip_details_retrieved,
+        "trip_details_confirmed": saved.trip_details_confirmed,
+        "route_details_found": saved.route_details_found,
+        "route_approved": saved.route_approved,
+        "charging_search_pending": saved.charging_search_pending,
+        "charging_search_approved": False,
+        "charging_station": saved.charging_station,
+        "charging_plan": saved.charging_plan,
+        "charging_plan_approved": False,
+        "vehicle_state": saved.vehicle_state,
+        "draft_reply": None,
+        "reply_options": None,
+        "maps_offer_pending": saved.maps_offer_pending,
+        "maps_offer_approved": False,
+        "maps_url": saved.maps_url,
+        "trip_done": saved.trip_done,
+        "change_pending": saved.change_pending,
+        "change_target": None,
+    }
+
+def to_saved_state(output_state: TripState) -> dict:
+    return ConversationState(
+        trip=output_state["trip"],
+        route=output_state["route"],
+        messages=[
+            {"role": "user" if isinstance(m, HumanMessage) else "assistant", "content": m.content}
+            for m in output_state["messages"]
+        ],
+        **{key: output_state[key] for key in (
+            "trip_details_retrieved", "trip_details_confirmed", "route_details_found", "route_approved",
+            "charging_search_pending", "charging_station", "charging_plan", "vehicle_state",
+            "maps_offer_pending", "maps_url", "trip_done", "change_pending",
+        )},
+    ).model_dump()
+
+def conversation_title(trip: TripDetails, messages: list[dict]) -> str:
+    if trip.origin and trip.destination:
+        return f"{trip.origin} → {trip.destination}" + (" (round trip)" if trip.is_round_trip else "")
+    return next((m["content"] for m in messages if m["role"] == "user"), "New trip")
 
 @app.post("/chat")
 # Plain def: the graph blocks on network calls, so FastAPI runs it in its thread pool
 # instead of stalling every other request on the event loop
-def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_user)):
+def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_user), db = Depends(get_db)):
+    # The server owns the conversation state; the client only sends the new message
+    if request.conversation_id:
+        row = get_conversation_row(db, user.id, request.conversation_id)
+        if row["ended"]:
+            raise HTTPException(status_code=409, detail="This chat has ended. Start a new trip to keep planning.")
+        saved = ConversationState.model_validate_json(row["state"])
+    else:
+        saved = ConversationState()
+
     try:
-        # 1. Convert incoming JSON message payload to LangChain message objects
-        langchain_messages = []
-        for msg in request.messages:
-            if msg.role == "user":
-                langchain_messages.append(HumanMessage(content=msg.content))
-            else:
-                langchain_messages.append(AIMessage(content=msg.content))
-        
-        # Append the incoming new prompt
-        langchain_messages.append(HumanMessage(content=request.message))
-
-        # 2. Build current state
-        current_state: TripState = {
-            "trip": request.trip,
-            "route": request.route.model_dump() if request.route else None,
-            "messages": langchain_messages,
-            "trip_details_retrieved": request.trip_details_retrieved,
-            "trip_details_confirmed": request.trip_details_confirmed,
-            "route_details_found": request.route_details_found,
-            "route_approved": request.route_approved,
-            "charging_search_pending": request.charging_search_pending,
-            "charging_search_approved": False,
-            "charging_station": request.charging_station,
-            "charging_plan": request.charging_plan,
-            "charging_plan_approved": False,
-            "vehicle_state": request.vehicle_state,
-            "draft_reply": None,
-            "reply_options": None,
-            "maps_offer_pending": request.maps_offer_pending,
-            "maps_offer_approved": False,
-            "maps_url": request.maps_url,
-        }
-
-        # 3. Invoke graph
-        output_state = app_graph.invoke(current_state)
-
-        # 4. Extract latest response and format messages for clean JSON response
-        formatted_messages = []
-        for msg in output_state["messages"]:
-            role = "user" if isinstance(msg, HumanMessage) else "assistant"
-            formatted_messages.append({"role": role, "content": msg.content})
-
-        latest_ai_message = formatted_messages[-1]["content"] if formatted_messages else ""
-
-        return {
-            "response": latest_ai_message,
-            "input_request": input_request_for(output_state),
-            "state": {
-                "trip": output_state["trip"].model_dump(),
-                "route": output_state["route"],
-                "messages": formatted_messages,
-                "trip_details_retrieved": output_state["trip_details_retrieved"],
-                "trip_details_confirmed": output_state["trip_details_confirmed"],
-                "route_details_found": output_state["route_details_found"],
-                "route_approved": output_state["route_approved"],
-                "charging_search_pending": output_state["charging_search_pending"],
-                "charging_station": output_state["charging_station"],
-                "charging_plan": output_state["charging_plan"],
-                "vehicle_state": output_state["vehicle_state"].model_dump(),
-                "maps_offer_pending": output_state["maps_offer_pending"],
-                "maps_url": output_state["maps_url"],
-            }
-        }
+        output_state = app_graph.invoke(to_graph_state(saved, request.message))
+        state = to_saved_state(output_state)
+        input_request = input_request_for(output_state)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
+    conversation = save_conversation(
+        db, user.id, request.conversation_id, conversation_title(output_state["trip"], state["messages"]), state, input_request
+    )
+    return {
+        "conversation": conversation,
+        "response": state["messages"][-1]["content"],
+        "input_request": input_request,
+        "state": state,
+    }

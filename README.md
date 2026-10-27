@@ -25,7 +25,9 @@ The Google Maps link is built in code (`google_maps_url` in `backend/planner.py`
 - **Plain Python** does the real work: routing, station lookup, and the charging plan math in `backend/planner.py` (pure functions, no LLM, unit tested), so the plan is deterministic and never invented.
 - **Fast paths keep it quick:** clear replies ("yes", "no thanks", "20% and 50 km") are parsed by rules in `backend/intent.py` and replies fully determined by the state use templates, so most turns make no LLM call. Anything ambiguous still goes to the LLM. Each `/chat` response can also carry an `input_request` telling the UI how to collect the next answer: a numbered list of options (fixed ones like yes/no, or suggestions the LLM writes, e.g. destinations) or a battery slider and range field. Typing always remains available.
 
-The backend is stateless. The frontend sends the full conversation state with every request and gets the updated state back.
+Once the trip is planned the user can **make changes** (battery/range or the trip; everything after that step is planned again), **plan a new trip** or **end the chat**.
+
+**Chat history lives on the server.** Each conversation's graph state is saved per user in SQLite (`backend/conversations.py`). The frontend sends only `{conversation_id, message}` to `/chat`; the backend loads the state, runs the graph and saves the result, so the client cannot alter the route or plan. `GET /conversations` lists a user's chats, `GET /conversations/{id}` reopens one, `POST /conversations/{id}/end` ends it (no more messages) and `DELETE /conversations/{id}` removes it. Deleting an account deletes its chats.
 
 ## Tech stack
 
@@ -42,14 +44,18 @@ The backend is stateless. The frontend sends the full conversation state with ev
 backend/
   main.py          # LangGraph nodes/routers + FastAPI /chat endpoint + API clients
   auth.py          # /auth endpoints: signup, login, me, profile, password, delete (SQLite, scrypt, JWT)
+  conversations.py # saved chats: list, open, end, delete
   planner.py       # charging plan logic (stops, charge times, total time)
   intent.py        # rule-based yes/no and battery/range parsing (LLM fallback when unsure)
   test_planner.py  # unit tests for the planner
   test_intent.py   # unit tests for intent.py
 frontend/
-  src/main.jsx     # routes: / (landing), /login, /signup, /app (chat, login required)
-  src/App.jsx      # chat UI
+  src/main.jsx     # routes: / (landing), /login, /signup, /app and /app/:conversationId (login required)
+  src/App.jsx      # chat page: chat list sidebar + the open chat
   src/pages/       # Landing, Login, Signup
+  src/components/ChatSidebar.jsx    # new trip button, chats grouped by day, profile
+  src/components/ChatView.jsx       # title, trip info bar, messages, input
+  src/components/TripInfoBar.jsx    # trip, route, battery and charging summary under the title
   src/components/SettingsModal.jsx  # profile, password, delete account
   src/components/InputRequest.jsx   # option list and battery/range card shown above the chat input
   src/auth.jsx     # auth context: calls /auth endpoints, stores the token
