@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Logo, ThemeToggle } from './components/Brand';
 import SettingsModal, { Avatar } from './components/SettingsModal';
 import InputRequest from './components/InputRequest';
+import MessageContent, { MapsButton } from './components/MessageContent';
 import { useTheme } from './theme';
 import { useAuth } from './auth';
 
@@ -57,6 +58,8 @@ export default function App() {
     charging_station: null,
     charging_plan: null,
     vehicle_state: { battery_soc: null, range_left: null },
+    maps_offer_pending: false,
+    maps_url: null,
   });
 
   const chatEndRef = useRef(null);
@@ -97,6 +100,8 @@ export default function App() {
         charging_station: graphState.charging_station,
         charging_plan: graphState.charging_plan,
         vehicle_state: graphState.vehicle_state,
+        maps_offer_pending: graphState.maps_offer_pending,
+        maps_url: graphState.maps_url,
       };
 
       const data = await authRequest('/chat', { body: payload });
@@ -147,6 +152,8 @@ export default function App() {
       charging_station: null,
       charging_plan: null,
       vehicle_state: { battery_soc: null, range_left: null },
+      maps_offer_pending: false,
+      maps_url: null,
     });
   };
 
@@ -229,6 +236,11 @@ export default function App() {
                 </p>
               </div>
             </div>
+            {hasRoute && graphState.maps_url && (
+              <div className="mt-4">
+                <MapsButton href={graphState.maps_url} variant="onColor" />
+              </div>
+            )}
           </section>
 
           {/* Vehicle Status Widget */}
@@ -383,7 +395,7 @@ export default function App() {
                           : 'bg-white text-slate-800 dark:bg-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700 rounded-2xl rounded-bl-md shadow-sm'
                       }`}
                     >
-                      {msg.content}
+                      <MessageContent content={msg.content} />
                     </div>
                   </div>
                 );

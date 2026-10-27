@@ -21,7 +21,7 @@ FILLER_WORDS = {
     "please", "pls", "plz", "thanks", "thank", "you", "do", "it", "that", "that's", "thats", "is", "its", "it's",
     "this", "all", "looks", "sounds", "the", "a", "me", "give", "show", "search", "find", "stations",
     "plan", "charging", "now", "and", "for", "with", "let's", "lets", "of", "course", "need", "want",
-    "something", "trip",
+    "something", "trip", "open", "in", "google", "maps", "map", "route",
 }
 
 
@@ -102,6 +102,10 @@ SEARCH_OFFER_OPTIONS = [
 PLAN_OFFER_OPTIONS = [
     ("Yes, give me the plan", "Where to stop, how long to charge and total time"),
     ("No thanks", "You can ask for it later"),
+]
+MAPS_OFFER_OPTIONS = [
+    ("Yes, open in Google Maps", "Get a directions link with the charging stops"),
+    ("No thanks", "Skip the map"),
 ]
 # Questions about the finished plan; these go to the LLM, which answers from the plan
 PLAN_FOLLOWUP_OPTIONS = [

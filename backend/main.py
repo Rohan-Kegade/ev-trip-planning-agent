@@ -9,9 +9,10 @@ import os
 import requests
 import polyline
 from concurrent.futures import ThreadPoolExecutor
-from planner import build_charging_plan, format_duration, format_plan_message, sample_route
+from planner import build_charging_plan, format_duration, format_plan_message, google_maps_url, sample_route
 from intent import (
-    PLAN_FOLLOWUP_OPTIONS, PLAN_OFFER_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS, TRIP_CONFIRM_OPTIONS,
+    MAPS_OFFER_OPTIONS, PLAN_FOLLOWUP_OPTIONS, PLAN_OFFER_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS,
+    TRIP_CONFIRM_OPTIONS,
     TRIP_TYPE_OPTIONS,
     quick_trip_type, quick_vehicle_state, quick_yes_no,
 )
@@ -92,6 +93,12 @@ class PlanApproval(BaseModel):
     )
 
 
+class MapsApproval(BaseModel):
+    is_approved: bool = Field(
+        description="True if the user wants the route opened in Google Maps. False if they decline or ask about something else."
+    )
+
+
 class VehicleState(BaseModel):
     battery_soc: int | None = Field(default=None, description="Battery in Percentage", le=100, ge=-1)
     range_left: int | None = Field(default=None, description="Estimated remaining range in kilometers")
@@ -114,6 +121,9 @@ class TripState(TypedDict):
     vehicle_state: VehicleState
     draft_reply: str | None
     reply_options: list[str] | None
+    maps_offer_pending: bool
+    maps_offer_approved: bool
+    maps_url: str | None
 
 
 # llm
@@ -123,6 +133,7 @@ structured_llm_route_approval = llm.with_structured_output(RouteApproval)
 structured_llm_trip_approval = llm.with_structured_output(TripApproval)
 structured_llm_charging_approval = llm.with_structured_output(ChargingApproval)
 structured_llm_plan_approval = llm.with_structured_output(PlanApproval)
+structured_llm_maps_approval = llm.with_structured_output(MapsApproval)
 structured_llm_message = llm.with_structured_output(LLMMessage)
 structured_llm_reply_with_options = llm.with_structured_output(ReplyWithOptions)
 
@@ -537,7 +548,8 @@ def is_trip_possible_with_current_vehicle_state(state: TripState):
         )
         return {"messages": [AIMessage(content=message)], "charging_search_pending": True}
 
-    return {"messages": [AIMessage(content="You have enough range to reach your destination directly. No charging stops required!")]}
+    message = "You have enough range to reach your destination directly. No charging stops required! Would you like this route in Google Maps, so you can start navigating?"
+    return {"messages": [AIMessage(content=message)], "maps_offer_pending": True}
  
 
 def find_charging_stations(state: TripState):
@@ -644,7 +656,53 @@ def plan_charging_stops(state: TripState):
         battery_soc=vehicle_state.battery_soc,
     )
 
-    return {"charging_plan": plan, "messages": [AIMessage(content=format_plan_message(plan))]}
+    if not plan["feasible"]:
+        return {"charging_plan": plan, "messages": [AIMessage(content=format_plan_message(plan))]}
+
+    message = f"{format_plan_message(plan)}\n\nWould you like this route with the charging stops in Google Maps, so you can start navigating?"
+    return {"charging_plan": plan, "messages": [AIMessage(content=message)], "maps_offer_pending": True}
+
+
+def maps_confirmation_extraction(state: TripState):
+    print("maps_confirmation_extraction")
+
+    is_approved = quick_yes_no(latest_user_message(state))
+    if is_approved is None:
+        prompt = f"""
+            The user was asked whether they want their route opened in Google Maps.
+            Determine if the user wants the Google Maps link or not.
+
+            Conversation:
+            {format_conversation(state["messages"])}
+        """
+        is_approved = structured_llm_maps_approval.invoke(prompt).is_approved
+
+    return {"maps_offer_pending": False, "maps_offer_approved": is_approved}
+
+
+def create_maps_route(state: TripState):
+    print("create_maps_route")
+
+    trip = state["trip"]
+    stops = (state["charging_plan"] or {}).get("stops", [])
+    url, included = google_maps_url(trip.origin, trip.destination, stops, trip.is_round_trip)
+
+    if not stops:
+        message = f"Here is your route from {trip.origin} to {trip.destination} in Google Maps:"
+    else:
+        message = f"Here is your route in Google Maps with {included} charging stop{'s' if included != 1 else ''} added along the way:"
+        if included < len(stops):
+            message += f" (Google Maps allows only {included} stops in one link, so add the rest from the plan above.)"
+    # The UI turns the link on its own line into an "Open in Google Maps" button
+    message += f"\n{url}"
+
+    return {"maps_url": url, "messages": [AIMessage(content=message)]}
+
+
+def decline_maps_route(state: TripState):
+    print("decline_maps_route")
+
+    return {"messages": [AIMessage(content="No problem. Have a safe trip!")]}
 
 
 def answer_plan_followup(state: TripState):
@@ -683,6 +741,8 @@ def input_request_for(state) -> dict | None:
     trip = state["trip"]
     vehicle = state["vehicle_state"]
 
+    if state["maps_offer_pending"]:
+        return choice(MAPS_OFFER_OPTIONS)
     if state["charging_plan"]:
         return choice(PLAN_FOLLOWUP_OPTIONS)
     if state["charging_station"]:
@@ -704,7 +764,10 @@ def input_request_for(state) -> dict | None:
 
 
 # routers
-def router_after_start(state: TripState) -> Literal["extract_trip_details", "trip_confirmation_extraction", "route_confirmation_extraction", "charging_confirmation_extraction", "extract_vehicle_state_information", "answer_plan_followup", "plan_confirmation_extraction"]:
+def router_after_start(state: TripState) -> Literal["maps_confirmation_extraction", "extract_trip_details", "trip_confirmation_extraction", "route_confirmation_extraction", "charging_confirmation_extraction", "extract_vehicle_state_information", "answer_plan_followup", "plan_confirmation_extraction"]:
+
+    if state['maps_offer_pending']:
+        return "maps_confirmation_extraction"
 
     if state['charging_plan']:
         return "answer_plan_followup"
@@ -769,6 +832,14 @@ def router_charging_approval(state: TripState) -> Literal["find_charging_station
     return "decline_charging_search"
 
 
+def router_maps_approval(state: TripState) -> Literal["create_maps_route", "decline_maps_route"]:
+
+    if state["maps_offer_approved"]:
+        return "create_maps_route"
+
+    return "decline_maps_route"
+
+
 def router_plan_approval(state: TripState) -> Literal["plan_charging_stops", "decline_charging_plan"]:
 
     if state["charging_plan_approved"]:
@@ -797,6 +868,9 @@ graph.add_node("plan_confirmation_extraction", plan_confirmation_extraction)
 graph.add_node("decline_charging_plan", decline_charging_plan)
 graph.add_node("plan_charging_stops", plan_charging_stops)
 graph.add_node("answer_plan_followup", answer_plan_followup)
+graph.add_node("maps_confirmation_extraction", maps_confirmation_extraction)
+graph.add_node("create_maps_route", create_maps_route)
+graph.add_node("decline_maps_route", decline_maps_route)
 
 graph.add_conditional_edges(START, router_after_start)
 graph.add_edge("extract_trip_details", "validate_trip_details")
@@ -818,6 +892,9 @@ graph.add_conditional_edges("plan_confirmation_extraction", router_plan_approval
 graph.add_edge("decline_charging_plan", END)
 graph.add_edge("plan_charging_stops", END)
 graph.add_edge("answer_plan_followup", END)
+graph.add_conditional_edges("maps_confirmation_extraction", router_maps_approval)
+graph.add_edge("create_maps_route", END)
+graph.add_edge("decline_maps_route", END)
 
 app_graph = graph.compile()
 
@@ -852,6 +929,8 @@ class ChatRequest(BaseModel):
     charging_station: list | None = None
     charging_plan: dict | None = None
     vehicle_state: VehicleState = Field(default_factory=VehicleState)
+    maps_offer_pending: bool = False
+    maps_url: str | None = None
 
 @app.post("/chat")
 # Plain def: the graph blocks on network calls, so FastAPI runs it in its thread pool
@@ -886,6 +965,9 @@ def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_user)):
             "vehicle_state": request.vehicle_state,
             "draft_reply": None,
             "reply_options": None,
+            "maps_offer_pending": request.maps_offer_pending,
+            "maps_offer_approved": False,
+            "maps_url": request.maps_url,
         }
 
         # 3. Invoke graph
@@ -914,6 +996,8 @@ def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_user)):
                 "charging_station": output_state["charging_station"],
                 "charging_plan": output_state["charging_plan"],
                 "vehicle_state": output_state["vehicle_state"].model_dump(),
+                "maps_offer_pending": output_state["maps_offer_pending"],
+                "maps_url": output_state["maps_url"],
             }
         }
     except Exception as e:

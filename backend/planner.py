@@ -4,6 +4,7 @@ Pure functions only (no LLM, no network) so the plan is deterministic and easy t
 """
 
 import math
+from urllib.parse import quote, urlencode
 
 # ---- Planning assumptions ----
 RESERVE_FRACTION = 0.10         # never plan to arrive with less than 10% of full range
@@ -13,6 +14,10 @@ FULL_CHARGE_MINUTES = 48        # approx. time for 0-100% on a ~50 kW charger (~
 MAX_STOPS = 20                  # safety cap on the greedy loop
 MIN_PROGRESS_KM = 0.5           # each stop must be at least this far ahead of the last one
 COARSE_STEP_KM = 0.5            # spacing of route points used for the first, cheap nearest-point pass
+
+# Google Maps directions links (https://developers.google.com/maps/documentation/urls/get-started)
+GOOGLE_MAPS_DIRECTIONS_URL = "https://www.google.com/maps/dir/"
+MAX_MAPS_WAYPOINTS = 9          # the most waypoints a Maps link supports
 
 EARTH_RADIUS_KM = 6371.0088
 
@@ -163,6 +168,8 @@ def build_charging_plan(points, stations, one_way_km, drive_minutes, is_round_tr
             "id": station.get("id"),
             "name": station.get("name"),
             "town": station.get("town"),
+            "latitude": station.get("latitude"),
+            "longitude": station.get("longitude"),
             "km": round(station["km"], 1),
             "detour_km": round(station["detour_km"], 1),
             "leg": station["leg"],
@@ -237,3 +244,30 @@ def format_plan_message(plan):
         )
 
     return "\n".join(lines)
+
+
+def google_maps_url(origin, destination, stops, is_round_trip):
+    """Driving directions link with the charging stops as waypoints, in route order.
+
+    A round trip goes out via the outbound stops, through the destination, and back via the
+    return stops. Returns (url, stops_included); stops past the waypoint limit are left out.
+    """
+    def point(stop):
+        return f"{stop['latitude']:.6f},{stop['longitude']:.6f}"
+
+    located = [s for s in stops if s.get("latitude") is not None and s.get("longitude") is not None]
+    outbound = [point(s) for s in located if s.get("leg") != "return"]
+
+    if is_round_trip:
+        returning = [point(s) for s in located if s.get("leg") == "return"]
+        waypoints, final = outbound + [destination] + returning, origin
+    else:
+        waypoints, final = outbound, destination
+
+    waypoints = waypoints[:MAX_MAPS_WAYPOINTS]
+    stops_included = len([w for w in waypoints if w != destination])
+
+    params = {"api": "1", "origin": origin, "destination": final, "travelmode": "driving"}
+    if waypoints:
+        params["waypoints"] = "|".join(waypoints)
+    return f"{GOOGLE_MAPS_DIRECTIONS_URL}?{urlencode(params, quote_via=quote)}", stops_included

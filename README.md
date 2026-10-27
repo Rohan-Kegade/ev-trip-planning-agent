@@ -8,11 +8,16 @@ The conversation is a [LangGraph](https://langchain-ai.github.io/langgraph/) sta
 
 ```
 trip details → confirm trip → route (distance/time) → confirm route
-   → battery & range → enough range? ── yes → done
-                              │
+   → battery & range → enough range? ── yes ──────────────────────┐
+                              │                                     │
                               no → offer station search → find stations
-                                     → offer charging plan → plan + follow-up Q&A
+                                     → offer charging plan → plan   │
+                                                              ↓     ↓
+                                     offer Google Maps link → link with stops as waypoints
+                                                              → follow-up Q&A
 ```
+
+The Google Maps link is built in code (`google_maps_url` in `backend/planner.py`) using the [Maps URLs](https://developers.google.com/maps/documentation/urls/get-started) format, so it needs no API key. Charging stops are added as waypoints in route order (up to 9).
 
 **Key design idea: the LLM only handles language; code handles the numbers.**
 

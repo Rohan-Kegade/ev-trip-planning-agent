@@ -1,6 +1,6 @@
 """Quick checks for planner.py. Run: python test_planner.py"""
 
-from planner import build_charging_plan, format_plan_message, haversine_km, locate_stations
+from planner import build_charging_plan, format_plan_message, google_maps_url, haversine_km, locate_stations
 
 DEG_PER_KM = 1 / 111.195  # along a meridian
 
@@ -103,3 +103,33 @@ gaps = [haversine_km(a, b) for a, b in zip(sampled, sampled[1:-1])]
 check("sample gaps are close to 8 km", all(7.5 <= g <= 8.5 for g in gaps))
 
 print("\nall speed-related checks passed")
+
+# -- Google Maps link --
+from urllib.parse import parse_qs, urlparse
+
+
+def maps_params(url):
+    return {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
+
+
+out = {"latitude": 18.75, "longitude": 73.4, "leg": "outbound"}
+back = {"latitude": 18.8, "longitude": 73.3, "leg": "return"}
+
+url, n = google_maps_url("Pune", "Mumbai", [out], False)
+q = maps_params(url)
+check("maps: one way origin/destination", q["origin"] == "Pune" and q["destination"] == "Mumbai" and q["travelmode"] == "driving")
+check("maps: stop as waypoint", q["waypoints"] == "18.750000,73.400000" and n == 1)
+
+url, n = google_maps_url("Pune", "Mumbai", [out, back], True)
+q = maps_params(url)
+check("maps: round trip returns to origin", q["destination"] == "Pune")
+check("maps: round trip order out -> destination -> back", q["waypoints"] == "18.750000,73.400000|Mumbai|18.800000,73.300000" and n == 2)
+
+url, n = google_maps_url("Pune", "Mumbai", [], False)
+check("maps: no stops, no waypoints", "waypoints" not in maps_params(url) and n == 0)
+
+many = [{"latitude": 18 + i / 100, "longitude": 73.0, "leg": "outbound"} for i in range(12)]
+url, n = google_maps_url("Pune", "Mumbai", many, False)
+check("maps: capped at 9 waypoints", len(maps_params(url)["waypoints"].split("|")) == 9 and n == 9)
+
+check("maps: plan stops carry coordinates", all("latitude" in s and "longitude" in s for s in plan["stops"]))

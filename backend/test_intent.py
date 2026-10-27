@@ -1,7 +1,7 @@
 """Quick checks for intent.py. Run: python test_intent.py"""
 
 from intent import (
-    PLAN_OFFER_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS, TRIP_CONFIRM_OPTIONS, TRIP_TYPE_OPTIONS,
+    MAPS_OFFER_OPTIONS, PLAN_OFFER_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS, TRIP_CONFIRM_OPTIONS, TRIP_TYPE_OPTIONS,
     quick_trip_type, quick_vehicle_state, quick_yes_no,
 )
 
@@ -54,7 +54,7 @@ check("place -> llm", quick_trip_type("Mumbai") is None)
 
 # -- every option the UI offers is handled without the LLM, with the intended meaning --
 check("options: trip type", [quick_trip_type(label) for label, _ in TRIP_TYPE_OPTIONS] == [False, True])
-for options in (TRIP_CONFIRM_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS, PLAN_OFFER_OPTIONS):
+for options in (TRIP_CONFIRM_OPTIONS, ROUTE_CONFIRM_OPTIONS, SEARCH_OFFER_OPTIONS, PLAN_OFFER_OPTIONS, MAPS_OFFER_OPTIONS):
     labels = [label for label, _ in options]
     check(f"options: {labels}", [quick_yes_no(label) for label in labels] == [True, False])
 
