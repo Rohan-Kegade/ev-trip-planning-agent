@@ -10,6 +10,7 @@ import requests
 import polyline
 from concurrent.futures import ThreadPoolExecutor
 from planner import build_charging_plan, format_duration, format_plan_message, sample_route
+from intent import quick_vehicle_state, quick_yes_no
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from auth import router as auth_router, get_current_user, User
@@ -43,6 +44,13 @@ class RouteDetails(BaseModel):
 
 class LLMMessage(BaseModel):
     message: str
+
+
+class TripTurn(TripDetails):
+    message: str = Field(
+        default="",
+        description="Your next message to the user. Empty if origin, destination and trip type are all known.",
+    )
 
 
 class RouteApproval(BaseModel):
@@ -89,10 +97,11 @@ class TripState(TypedDict):
     charging_plan: dict
     charging_plan_approved: bool
     vehicle_state: VehicleState
+    draft_reply: str | None
 
 
 # llm
-structured_llm_trip_details_extractor = llm.with_structured_output(TripDetails)
+structured_llm_trip_turn = llm.with_structured_output(TripTurn)
 structured_llm_vehicle_state_extractor = llm.with_structured_output(VehicleState)
 structured_llm_route_approval = llm.with_structured_output(RouteApproval)
 structured_llm_trip_approval = llm.with_structured_output(TripApproval)
@@ -102,6 +111,22 @@ structured_llm_message = llm.with_structured_output(LLMMessage)
 
 
 # helper functions
+def format_conversation(messages):
+    # Plain "User: ..." lines; the default repr adds ids and metadata the LLM does not need
+    return "\n".join(
+        f"{'User' if isinstance(msg, HumanMessage) else 'Assistant'}: {msg.content}" for msg in messages
+    )
+
+
+def latest_user_message(state):
+    return state["messages"][-1].content if state["messages"] else ""
+
+
+def describe_trip(trip):
+    trip_type = "unknown" if trip.is_round_trip is None else "round trip" if trip.is_round_trip else "one way"
+    return f"origin: {trip.origin or 'unknown'}, destination: {trip.destination or 'unknown'}, trip type: {trip_type}"
+
+
 def get_coordinates(place_name: str):
     
     url = "https://api.openrouteservice.org/geocode/search"
@@ -126,8 +151,8 @@ def get_coordinates(place_name: str):
 
 def get_route(origin: str, destination: str):
 
-    start = get_coordinates(origin)
-    end = get_coordinates(destination)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        start, end = pool.map(get_coordinates, [origin, destination])
 
     if start is None or end is None:
         return None
@@ -232,21 +257,31 @@ def get_charging_stations_along_route(geometry: str, search_radius_km: int = 5):
 def extract_trip_details(state: TripState):
     print("extract_trip_details")
 
+    # One call both extracts the trip and drafts the follow-up question, instead of two in a row
     prompt = f"""
-        Extract the trip details from the conversation.
-        If the user's response is ambiguous or unclear, do not extract the information.
-        Do not overwrite existing values with `None`. Preserve previously collected information unless the user explicitly changes it.
+        You are an intelligent EV trip-planning assistant.
 
-        Current Trip:
-        {state["trip"]}
+        1. Extract the trip details (origin, destination, round trip or one way) from the conversation.
+           If the user's response is ambiguous or unclear, do not extract the information.
+           Preserve previously collected information unless the user explicitly changes it.
+
+        2. If any of the three is still unknown after this message, write your next message to the user:
+           - Have a natural conversation and ask for only one missing detail at a time.
+           - If the user has not decided where to go, help them decide.
+           - If the user's response is ambiguous or unclear, ask a follow-up question to clarify. Do not make assumptions.
+           - Do not mention internal fields or technical details.
+           - Do not answer anything unrelated to EV trip planning.
+           If all three are known, leave the message empty.
+
+        Trip so far: {describe_trip(state["trip"])}
 
         Conversation:
-        {state["messages"]}
-
+        {format_conversation(state["messages"])}
     """
-    trip_details = structured_llm_trip_details_extractor.invoke(prompt)
+    turn = structured_llm_trip_turn.invoke(prompt)
 
-    return {"trip": trip_details}
+    trip = TripDetails(origin=turn.origin, destination=turn.destination, is_round_trip=turn.is_round_trip)
+    return {"trip": trip, "draft_reply": turn.message.strip() or None}
 
 
 def validate_trip_details(state: TripState):
@@ -268,14 +303,17 @@ def validate_trip_details(state: TripState):
 def gather_trip_details(state: TripState):
     print("gather_trip_details")
 
+    # Drafted by extract_trip_details this turn; only the rejection paths need a fresh call
+    if state.get("draft_reply"):
+        return {"messages": [AIMessage(content=state["draft_reply"])]}
+
     prompt = f"""
         You are an intelligent EV trip-planning assistant.
         
-        Required Fields:
-        {state["trip"]}
+        Trip so far: {describe_trip(state["trip"])}
 
         Conversation:
-        {state["messages"]}
+        {format_conversation(state["messages"])}
 
         
         Have a natural conversation with the user.
@@ -303,31 +341,31 @@ def gather_trip_details(state: TripState):
 def ask_for_trip_confirmation(state: TripState):
     print("ask_for_trip_confirmation")
 
-    prompt = f"""
-        You are an intelligent EV trip-planning assistant.
-        Present the trip details extracted so far to the user (origin, destination, and whether it is a round trip or one way).
-        Ask them to confirm that these are correct so you can calculate the route, distance and travel time.
-        Do not mention internal fields or technical details.
+    trip = state["trip"]
+    trip_kind = "a round trip (there and back)" if trip.is_round_trip else "one way"
+    message = (
+        f"Just to confirm: you're driving from {trip.origin} to {trip.destination}, {trip_kind}. "
+        "Is that right? Once you confirm, I'll work out the route, distance and travel time."
+    )
 
-        Trip: {state["trip"]}
-    """
-    response = structured_llm_message.invoke(prompt)
-
-    return {"messages": [AIMessage(content=response.message)]}
+    return {"messages": [AIMessage(content=message)]}
 
 
 def trip_confirmation_extraction(state: TripState):
     print("trip_confirmation_extraction")
 
-    prompt = f"""
-        Determine if the user confirmed the trip details or wants to make changes.
+    is_approved = quick_yes_no(latest_user_message(state))
+    if is_approved is None:
+        prompt = f"""
+            Determine if the user confirmed the trip details or wants to make changes.
 
-        Proposed Trip: {state["trip"]}
-        Conversation: {state["messages"]}
-    """
-    response = structured_llm_trip_approval.invoke(prompt)
+            Proposed Trip: {describe_trip(state["trip"])}
+            Conversation:
+            {format_conversation(state["messages"])}
+        """
+        is_approved = structured_llm_trip_approval.invoke(prompt).is_approved
 
-    if response.is_approved:
+    if is_approved:
         return {"trip_details_confirmed": True}
 
     # Re-extract and re-validate on the next turn so any changes are picked up
@@ -356,41 +394,39 @@ def find_route_details(state: TripState):
 def ask_for_route_confirmation(state: TripState):
     print("ask_for_route_confirmation")
 
-    time_text = format_duration(state["route"]["time"])
-    trip_kind = "round trip (total for going and coming back)" if state["trip"].is_round_trip else "one way"
+    trip = state["trip"]
+    route = state["route"]
+    time_text = format_duration(route["time"])
 
-    prompt = f"""
+    if trip.is_round_trip:
+        summary = (
+            f"Your round trip from {trip.origin} to {trip.destination} and back is {route['distance']:g} km in total, "
+            f"about {time_text} of driving."
+        )
+    else:
+        summary = f"Your one way trip from {trip.origin} to {trip.destination} is {route['distance']:g} km, about {time_text} of driving."
 
-    You are an intelligent EV trip-planning assistant.
-    Present the TRIP AND calculated ROUTE details to the user and ask if they want to proceed ahead with further planning.
-    Use the distance and travel time below exactly as written. Do not convert, recalculate or round them.
-    State clearly whether the figures are for a one way trip or the total for a round trip.
+    message = f"{summary} Shall I go ahead and check your battery and charging needs?"
 
-    Current Trip: {state['trip']}
-    Trip Type: {trip_kind}
-    Distance: {state['route']['distance']} km
-    Travel Time: {time_text}
-
-    """
-    response = structured_llm_message.invoke(prompt)
-
-    return {"messages": [AIMessage(content=response.message)]}
+    return {"messages": [AIMessage(content=message)]}
 
 
 def route_confirmation_extraction(state: TripState):
     print("route_confirmation_extraction")
 
-    prompt = f"""
+    is_approved = quick_yes_no(latest_user_message(state))
+    if is_approved is None:
+        # Distance and time only: the route geometry is thousands of characters the LLM does not need
+        prompt = f"""
+            Determine if the user approved the route or wants to make changes.
 
-    Determine if the user approved the route or wants to make changes.
+            Proposed Route: {state['route']['distance']} km, {format_duration(state['route']['time'])}
+            Conversation:
+            {format_conversation(state['messages'])}
+        """
+        is_approved = structured_llm_route_approval.invoke(prompt).is_approved
 
-    Proposed Route: {state['route']}
-    Conversation: {state['messages']}
-
-    """
-    response = structured_llm_route_approval.invoke(prompt)
-
-    if response.is_approved:
+    if is_approved:
         return {"route_approved": True}
 
     # Rejected: clear route and confirmation flags so trip details are re-extracted
@@ -407,40 +443,37 @@ def route_confirmation_extraction(state: TripState):
 def gather_vehicle_state_information(state: TripState):
     print("gather_vehicle_state_information")
 
-    prompt = f"""
-        You are an intelligent EV trip-planning assistant, in the middle of an ongoing conversation.
+    vehicle = state["vehicle_state"]
+    need_battery = vehicle.battery_soc is None
+    need_range = vehicle.range_left is None
 
-        The user has just approved the route. Now ask for the current battery percentage and the estimated range left (in km) of their electric vehicle.
+    if need_battery and not need_range:
+        message = "Great. What's your current battery percentage?"
+    elif need_range and not need_battery:
+        message = "Great. Roughly how many km of range does your car show right now?"
+    else:
+        message = "Great. What's your current battery percentage, and roughly how many km of range does your car show?"
 
-        Current Vehicle State (already known, do not ask for these again):
-        {state["vehicle_state"]}
-
-        Conversation:
-        {state["messages"]}
-
-        Do not greet the user or introduce yourself. Do not repeat the trip or route details.
-        Keep it to one short, natural sentence that flows from the previous message.
-        If only one of battery or range is still missing, ask only for that one.
-
-    """
-    response = structured_llm_message.invoke(prompt)
-
-    return {"messages": [AIMessage(content=response.message)]}
+    return {"messages": [AIMessage(content=message)]}
 
 
 def extract_vehicle_state_information(state: TripState):
     print("extract_vehicle_state_information")
 
+    parsed = quick_vehicle_state(latest_user_message(state))
+    if parsed:
+        battery, range_km = parsed
+        return {"vehicle_state": VehicleState(battery_soc=battery, range_left=range_km)}
+
     prompt = f"""
+        Extract the battery and range information from the conversation.
 
-    Extract the battery and range information from given context.
-
-    Conversation: {state['messages']}
-
+        Conversation:
+        {format_conversation(state['messages'])}
     """
     response = structured_llm_vehicle_state_extractor.invoke(prompt)
 
-    return { "vehicle_state": response } 
+    return {"vehicle_state": response}
 
 
 def is_trip_possible_with_current_vehicle_state(state: TripState):
@@ -499,15 +532,18 @@ def find_charging_stations(state: TripState):
 def charging_confirmation_extraction(state: TripState):
     print("charging_confirmation_extraction")
 
-    prompt = f"""
-        The user was asked whether to search for charging stations along their route because their current range is not enough.
-        Determine if the user agreed to the search or declined.
+    is_approved = quick_yes_no(latest_user_message(state))
+    if is_approved is None:
+        prompt = f"""
+            The user was asked whether to search for charging stations along their route because their current range is not enough.
+            Determine if the user agreed to the search or declined.
 
-        Conversation: {state["messages"]}
-    """
-    response = structured_llm_charging_approval.invoke(prompt)
+            Conversation:
+            {format_conversation(state["messages"])}
+        """
+        is_approved = structured_llm_charging_approval.invoke(prompt).is_approved
 
-    return {"charging_search_pending": False, "charging_search_approved": response.is_approved}
+    return {"charging_search_pending": False, "charging_search_approved": is_approved}
 
 
 def decline_charging_search(state: TripState):
@@ -521,15 +557,18 @@ def decline_charging_search(state: TripState):
 def plan_confirmation_extraction(state: TripState):
     print("plan_confirmation_extraction")
 
-    prompt = f"""
-        The user was told that charging stations were found along their route and was asked whether they want a complete charging plan.
-        Determine if the user now wants the complete charging plan or not.
+    is_approved = quick_yes_no(latest_user_message(state))
+    if is_approved is None:
+        prompt = f"""
+            The user was told that charging stations were found along their route and was asked whether they want a complete charging plan.
+            Determine if the user now wants the complete charging plan or not.
 
-        Conversation: {state["messages"]}
-    """
-    response = structured_llm_plan_approval.invoke(prompt)
+            Conversation:
+            {format_conversation(state["messages"])}
+        """
+        is_approved = structured_llm_plan_approval.invoke(prompt).is_approved
 
-    return {"charging_plan_approved": response.is_approved}
+    return {"charging_plan_approved": is_approved}
 
 
 def decline_charging_plan(state: TripState):
@@ -574,13 +613,13 @@ def answer_plan_followup(state: TripState):
         If the user wants to plan a different trip, tell them to press the new trip button in the sidebar.
         Do not answer anything unrelated to EV trip planning.
 
-        Trip: {state["trip"]}
+        Trip: {describe_trip(state["trip"])}
 
         Charging plan:
         {format_plan_message(state["charging_plan"])}
 
         Conversation:
-        {state["messages"]}
+        {format_conversation(state["messages"])}
     """
     response = structured_llm_message.invoke(prompt)
 
@@ -738,7 +777,9 @@ class ChatRequest(BaseModel):
     vehicle_state: VehicleState = Field(default_factory=VehicleState)
 
 @app.post("/chat")
-async def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_user)):
+# Plain def: the graph blocks on network calls, so FastAPI runs it in its thread pool
+# instead of stalling every other request on the event loop
+def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_user)):
     try:
         # 1. Convert incoming JSON message payload to LangChain message objects
         langchain_messages = []
@@ -766,6 +807,7 @@ async def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_u
             "charging_plan": request.charging_plan,
             "charging_plan_approved": False,
             "vehicle_state": request.vehicle_state,
+            "draft_reply": None,
         }
 
         # 3. Invoke graph

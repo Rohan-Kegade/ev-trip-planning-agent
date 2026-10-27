@@ -18,6 +18,7 @@ trip details → confirm trip → route (distance/time) → confirm route
 
 - **LLM (Gemini)** extracts structured data from what the user says (origin, destination, battery %, yes/no confirmations) and writes friendly replies.
 - **Plain Python** does the real work: routing, station lookup, and the charging plan math in `backend/planner.py` (pure functions, no LLM, unit tested), so the plan is deterministic and never invented.
+- **Fast paths keep it quick:** clear replies ("yes", "no thanks", "20% and 50 km") are parsed by rules in `backend/intent.py` and replies fully determined by the state use templates, so most turns make no LLM call. Anything ambiguous still goes to the LLM.
 
 The backend is stateless. The frontend sends the full conversation state with every request and gets the updated state back.
 
@@ -37,7 +38,9 @@ backend/
   main.py          # LangGraph nodes/routers + FastAPI /chat endpoint + API clients
   auth.py          # /auth endpoints: signup, login, me, profile, password, delete (SQLite, scrypt, JWT)
   planner.py       # charging plan logic (stops, charge times, total time)
+  intent.py        # rule-based yes/no and battery/range parsing (LLM fallback when unsure)
   test_planner.py  # unit tests for the planner
+  test_intent.py   # unit tests for intent.py
 frontend/
   src/main.jsx     # routes: / (landing), /login, /signup, /app (chat, login required)
   src/App.jsx      # chat UI
@@ -88,4 +91,5 @@ Open http://localhost:5173, create an account and start chatting, e.g. *"I want 
 ```bash
 cd backend
 python test_planner.py
+python test_intent.py
 ```
